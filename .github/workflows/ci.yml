@@ -10,6 +10,9 @@ jobs:
   test-backend:
     name: Backend Tests & Evaluation Suite
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -19,24 +22,22 @@ jobs:
         with:
           python-version: "3.11"
           cache: "pip"
+          cache-dependency-path: backend/requirements.txt
 
       - name: Install backend dependencies
         run: |
-          cd backend
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest pytest-asyncio
 
       - name: Run verification & agent pipeline tests
         env:
-          PYTHONPATH: .
+          PYTHONPATH: ${{ github.workspace }}/backend:.
         run: |
-          cd backend
           python -m pytest tests/test_agent_pipeline.py -v
 
       - name: Run 35-item evaluation suite
         env:
-          PYTHONPATH: .
+          PYTHONPATH: ${{ github.workspace }}/backend:.
         run: |
-          cd backend
           python tests/run_eval.py
