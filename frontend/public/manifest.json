@@ -1,0 +1,16 @@
+{
+  "name": "Saath (साथ) — Family Coordination Board",
+  "short_name": "Saath",
+  "description": "Coordinate ageing parents' bills, pensions, and obligations across cities",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#e8962a",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
