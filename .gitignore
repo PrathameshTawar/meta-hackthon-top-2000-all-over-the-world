@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+dist/
+.pytest_cache/
+
+# Environment
+.env
+*.env.local
+
+# Node
+node_modules/
+.next/
+.vercel/
+out/
+
+# DB / misc
+*.db
+*.sqlite3
+pgdata/
+
+# OS
+.DS_Store
+Thumbs.db
