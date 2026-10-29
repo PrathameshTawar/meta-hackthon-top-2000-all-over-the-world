@@ -1,7 +1,14 @@
+import sys
+from pathlib import Path
 import asyncio
 from datetime import datetime, timezone, timedelta
 import pytest
 from sqlalchemy import select
+
+# Ensure backend root is on sys.path for direct pytest invocation
+backend_dir = Path(__file__).resolve().parent.parent
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
 
 from app.db.session import init_db, AsyncSessionLocal
 from app.db.seed import seed_data

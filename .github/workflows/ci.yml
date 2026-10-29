@@ -28,11 +28,15 @@ jobs:
           pip install pytest pytest-asyncio
 
       - name: Run verification & agent pipeline tests
+        env:
+          PYTHONPATH: .
         run: |
           cd backend
-          pytest tests/test_agent_pipeline.py -v
+          python -m pytest tests/test_agent_pipeline.py -v
 
       - name: Run 35-item evaluation suite
+        env:
+          PYTHONPATH: .
         run: |
           cd backend
-          python -m tests.run_eval
+          python tests/run_eval.py
