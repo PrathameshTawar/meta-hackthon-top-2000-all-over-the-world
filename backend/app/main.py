@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
+from app.config import settings
 from app.db.session import init_db
 from app.db.seed import seed_data
 from app.scheduler.escalation import start_scheduler
@@ -20,16 +21,17 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Saath API",
-    description="Family coordination agent backend",
-    version="0.1.0",
+    description="Family coordination agent backend (Meta Global AI Developer Hackathon)",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
+# Secure CORS: explicit origin list for frontend and local development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -45,5 +47,10 @@ app.include_router(admin.router, prefix="/admin", tags=["admin"])
 @app.get("/health")
 @app.get("/healthz")
 async def health():
-    return {"status": "ok", "app": "saath", "version": "0.1.0"}
-
+    return {
+        "status": "ok",
+        "app": "saath",
+        "version": "0.2.0",
+        "model": settings.muse_spark_model,
+        "llm_base_url": settings.llm_base_url,
+    }
