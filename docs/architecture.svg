@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 680" width="100%" height="100%" style="background:#0b1120; font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <defs>
+    <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#4f46e5" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- Title & Subtitle -->
+  <text x="550" y="45" text-anchor="middle" fill="#ffffff" font-size="24" font-weight="800" letter-spacing="1">SAATH (साथ) — SYSTEM ARCHITECTURE</text>
+  <text x="550" y="70" text-anchor="middle" fill="#94a3b8" font-size="13">Meta Global AI Developer Hackathon 2026 · Track: Build for Your World</text>
+
+  <!-- Input Layer: Users & Channels -->
+  <g transform="translate(60, 110)">
+    <rect width="280" height="230" rx="16" fill="url(#cardGrad)" stroke="#334155" stroke-width="1.5" filter="url(#glow)"/>
+    <rect x="20" y="20" width="40" height="40" rx="10" fill="#f59e0b" fill-opacity="0.2"/>
+    <text x="40" y="45" text-anchor="middle" fill="#f59e0b" font-size="18">👴</text>
+    <text x="75" y="38" fill="#f8fafc" font-size="16" font-weight="700">Aging Parents (Pune)</text>
+    <text x="75" y="55" fill="#94a3b8" font-size="12">Zero-App Friction Channel</text>
+    
+    <rect x="20" y="80" width="240" height="58" rx="10" fill="#0f172a" stroke="#1e293b"/>
+    <text x="35" y="105" fill="#e2e8f0" font-size="13" font-weight="600">🎙️ Marathi/Hindi Voice Notes</text>
+    <text x="35" y="123" fill="#64748b" font-size="11">e.g. "वीज बिल आले आहे ₹१,८४०..."</text>
+
+    <rect x="20" y="148" width="240" height="58" rx="10" fill="#0f172a" stroke="#1e293b"/>
+    <text x="35" y="173" fill="#e2e8f0" font-size="13" font-weight="600">📸 Camera Photo of Bill/Slip</text>
+    <text x="35" y="191" fill="#64748b" font-size="11">MSEDCL, Star Health, PMC Tax</text>
+  </g>
+
+  <!-- Sibling & Earner Layer -->
+  <g transform="translate(60, 370)">
+    <rect width="280" height="250" rx="16" fill="url(#cardGrad)" stroke="#334155" stroke-width="1.5" filter="url(#glow)"/>
+    <rect x="20" y="20" width="40" height="40" rx="10" fill="#10b981" fill-opacity="0.2"/>
+    <text x="40" y="45" text-anchor="middle" fill="#10b981" font-size="18">👩‍💼</text>
+    <text x="75" y="38" fill="#f8fafc" font-size="16" font-weight="700">Sole Earner &amp; Siblings</text>
+    <text x="75" y="55" fill="#94a3b8" font-size="12">Mumbai, Bengaluru, Delhi</text>
+
+    <rect x="20" y="80" width="240" height="48" rx="8" fill="#0f172a" stroke="#1e293b"/>
+    <text x="35" y="102" fill="#e2e8f0" font-size="12" font-weight="600">💻 Next.js 14 Family Board</text>
+    <text x="35" y="117" fill="#64748b" font-size="10">4 Kanban Columns (Inbox/Assigned/Done)</text>
+
+    <rect x="20" y="136" width="240" height="48" rx="8" fill="#0f172a" stroke="#1e293b"/>
+    <text x="35" y="158" fill="#e2e8f0" font-size="12" font-weight="600">📊 30-Day Family Total</text>
+    <text x="35" y="173" fill="#64748b" font-size="10">Parents' bills + Own Education Loan EMI</text>
+
+    <rect x="20" y="192" width="240" height="48" rx="8" fill="#0f172a" stroke="#1e293b"/>
+    <text x="35" y="214" fill="#e2e8f0" font-size="12" font-weight="600">⌚ Watch Nudge + Claim Button</text>
+    <text x="35" y="229" fill="#64748b" font-size="10">1-Tap Claim callback in Telegram</text>
+  </g>
+
+  <!-- Central Agent Graph (LangGraph) -->
+  <g transform="translate(390, 110)">
+    <rect width="360" height="510" rx="16" fill="url(#cardGrad)" stroke="#6366f1" stroke-width="2" filter="url(#glow)"/>
+    <rect x="25" y="20" width="310" height="35" rx="8" fill="url(#primaryGrad)"/>
+    <text x="180" y="43" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="800" letter-spacing="0.5">LANGGRAPH MULTI-NODE AGENT</text>
+
+    <!-- Node 1: Perceive -->
+    <rect x="30" y="75" width="300" height="60" rx="10" fill="#0f172a" stroke="#4f46e5" stroke-width="1.5"/>
+    <text x="45" y="98" fill="#38bdf8" font-size="12" font-weight="700">1. MULTIMODAL PERCEIVE</text>
+    <text x="45" y="118" fill="#94a3b8" font-size="11">Meta Muse Spark Open (Photo OCR) / Speech WAV</text>
+
+    <!-- Node 2: Classify -->
+    <rect x="30" y="150" width="300" height="60" rx="10" fill="#0f172a" stroke="#4f46e5" stroke-width="1.5"/>
+    <text x="45" y="173" fill="#38bdf8" font-size="12" font-weight="700">2. CLASSIFY &amp; SAFETY GATE</text>
+    <text x="45" y="193" fill="#94a3b8" font-size="11">Bill / Loan EMI / Pension / Insurance / Medical</text>
+
+    <!-- Node 3: Medical Guardrail Branch -->
+    <rect x="30" y="225" width="300" height="65" rx="10" fill="#450a0a" stroke="#dc2626" stroke-width="1.5"/>
+    <text x="45" y="248" fill="#f87171" font-size="12" font-weight="700">🛡️ MEDICAL REFUSAL GUARDRAIL</text>
+    <text x="45" y="267" fill="#fca5a5" font-size="10">Appointment logistics only · Zero diagnostic interpretation</text>
+    <text x="45" y="280" fill="#cbd5e1" font-size="9">Strict Marathi refusal reply: "मी अर्थ सांगू शकत नाही..."</text>
+
+    <!-- Node 4: Extract & Verify -->
+    <rect x="30" y="305" width="300" height="60" rx="10" fill="#0f172a" stroke="#4f46e5" stroke-width="1.5"/>
+    <text x="45" y="328" fill="#38bdf8" font-size="12" font-weight="700">3. QUOTED EXTRACT &amp; CODE VERIFY</text>
+    <text x="45" y="348" fill="#94a3b8" font-size="11">Verbatim quote check · IST upcoming date · Amount check</text>
+
+    <!-- Node 5: Dedupe & Assign -->
+    <rect x="30" y="380" width="300" height="55" rx="10" fill="#0f172a" stroke="#4f46e5" stroke-width="1.5"/>
+    <text x="45" y="403" fill="#38bdf8" font-size="12" font-weight="700">4. CROSS-LINGUAL DEDUPE &amp; ROUTE</text>
+    <text x="45" y="421" fill="#94a3b8" font-size="11">Normalized Payee (MGL/महावितरण) · Category Owner</text>
+
+    <!-- Node 6: Draft & Marathi Reply -->
+    <rect x="30" y="448" width="300" height="52" rx="10" fill="#0f172a" stroke="#4f46e5" stroke-width="1.5"/>
+    <text x="45" y="471" fill="#38bdf8" font-size="12" font-weight="700">5. CLOSE THE LOOP (MARATHI TTS)</text>
+    <text x="45" y="489" fill="#94a3b8" font-size="11">Parent spoken confirmation · Smartwatch actionable nudge</text>
+  </g>
+
+  <!-- Right Layer: Models & Storage -->
+  <g transform="translate(790, 110)">
+    <!-- Meta Models Box -->
+    <rect width="250" height="230" rx="16" fill="url(#cardGrad)" stroke="#38bdf8" stroke-width="1.5" filter="url(#glow)"/>
+    <text x="125" y="38" text-anchor="middle" fill="#38bdf8" font-size="14" font-weight="700">META AI MODELS</text>
+    <line x1="25" y1="52" x2="225" y2="52" stroke="#334155"/>
+
+    <rect x="20" y="65" width="210" height="48" rx="8" fill="#0f172a" stroke="#1e293b"/>
+    <text x="32" y="86" fill="#e2e8f0" font-size="11" font-weight="600">Muse Spark Open 1026</text>
+    <text x="32" y="101" fill="#64748b" font-size="10">Photo Document OCR &amp; Routing</text>
+
+    <rect x="20" y="122" width="210" height="48" rx="8" fill="#0f172a" stroke="#1e293b"/>
+    <text x="32" y="143" fill="#e2e8f0" font-size="11" font-weight="600">Meta MMS Speech Model</text>
+    <text x="32" y="158" fill="#64748b" font-size="10">Marathi/Hindi Transcription &amp; TTS</text>
+
+    <rect x="20" y="179" width="210" height="38" rx="8" fill="#0f172a" stroke="#1e293b"/>
+    <text x="32" y="202" fill="#94a3b8" font-size="10">Hosted on Baseten / Meta APIs</text>
+  </g>
+
+  <!-- Database & Scheduler Box -->
+  <g transform="translate(790, 370)">
+    <rect width="250" height="250" rx="16" fill="url(#cardGrad)" stroke="#334155" stroke-width="1.5" filter="url(#glow)"/>
+    <text x="125" y="38" text-anchor="middle" fill="#a78bfa" font-size="14" font-weight="700">STORAGE &amp; SCHEDULER</text>
+    <line x1="25" y1="52" x2="225" y2="52" stroke="#334155"/>
+
+    <rect x="20" y="65" width="210" height="68" rx="8" fill="#0f172a" stroke="#1e293b"/>
+    <text x="32" y="86" fill="#e2e8f0" font-size="11" font-weight="600">SQLAlchemy Database</text>
+    <text x="32" y="103" fill="#64748b" font-size="10">• households, members, tasks</text>
+    <text x="32" y="119" fill="#64748b" font-size="10">• artifacts, evidence, events</text>
+
+    <rect x="20" y="145" width="210" height="85" rx="8" fill="#0f172a" stroke="#1e293b"/>
+    <text x="32" y="167" fill="#e2e8f0" font-size="11" font-weight="600">Hourly Escalation Scheduler</text>
+    <text x="32" y="184" fill="#64748b" font-size="10">APScheduler (Asia/Kolkata)</text>
+    <text x="32" y="200" fill="#64748b" font-size="10">Tasks due &lt;= 3 days unclaimed</text>
+    <text x="32" y="216" fill="#10b981" font-size="9">Fast-Forward Demo Simulation</text>
+  </g>
+
+  <!-- Connecting Arrows -->
+  <path d="M 340 225 L 390 225" stroke="#6366f1" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M 340 470 L 390 470" stroke="#6366f1" stroke-width="2"/>
+  <path d="M 750 225 L 790 225" stroke="#38bdf8" stroke-width="2"/>
+  <path d="M 750 470 L 790 470" stroke="#a78bfa" stroke-width="2"/>
+</svg>
