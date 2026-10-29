@@ -1,0 +1,49 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+
+from app.db.session import init_db
+from app.db.seed import seed_data
+from app.scheduler.escalation import start_scheduler
+from app.api import artifacts, tasks, members, households, webhooks, events, admin
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_db()
+    await seed_data()  # auto-seed demo household if empty
+    scheduler = start_scheduler()
+    yield
+    if scheduler:
+        scheduler.shutdown()
+
+
+app = FastAPI(
+    title="Saath API",
+    description="Family coordination agent backend",
+    version="0.1.0",
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(webhooks.router, prefix="/webhook", tags=["webhook"])
+app.include_router(artifacts.router, prefix="/artifacts", tags=["artifacts"])
+app.include_router(tasks.router, prefix="/tasks", tags=["tasks"])
+app.include_router(members.router, prefix="/members", tags=["members"])
+app.include_router(households.router, prefix="/households", tags=["households"])
+app.include_router(events.router, prefix="/events", tags=["events"])
+app.include_router(admin.router, prefix="/admin", tags=["admin"])
+
+
+@app.get("/health")
+@app.get("/healthz")
+async def health():
+    return {"status": "ok", "app": "saath", "version": "0.1.0"}
+
