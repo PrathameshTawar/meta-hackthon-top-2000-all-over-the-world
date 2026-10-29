@@ -1,29 +1,48 @@
 from pydantic_settings import BaseSettings
+from typing import List
+import os
 
 
 class Settings(BaseSettings):
-    # Database (defaults to local SQLite for easy zero-setup dev & tests; supports PostgreSQL in production)
+    # Database (defaults to local SQLite for zero-setup dev & eval; PostgreSQL in production)
     database_url: str = "sqlite+aiosqlite:///./saath.db"
 
-    # Meta / Fireworks AI
+    # Meta AI / Open-Weight Models via Baseten / Meta Model API
+    llm_base_url: str = "https://inference.baseten.co/v1"
+    llm_api_key: str = ""
+    muse_spark_model: str = "meta-models/muse-spark-open-1026"
+    muse_voice_model: str = "muse-voice-transcribe-1.0"
+    
+    # Backwards-compatibility aliases
     meta_api_key: str = ""
-    muse_voice_model: str = "accounts/fireworks/models/whisper-v3"  # update from docs
-    muse_spark_model: str = "accounts/fireworks/models/llama-v3p2-11b-vision-instruct"  # update from docs
+
+    # Security & Admin
+    admin_secret: str = "saath_admin_secret_demo"
+    cors_origins: List[str] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+    ]
 
     # Telegram
     telegram_bot_token: str = ""
     telegram_webhook_secret: str = ""
 
-    # App
+    # App & Localization
     base_url: str = "http://localhost:8000"
     frontend_url: str = "http://localhost:3000"
-    default_language: str = "mr"  # Marathi; fall back to "hi" if transcription weak
+    default_language: str = "mr"  # Marathi ("mr") or Hindi ("hi")
+    timezone_name: str = "Asia/Kolkata"
 
     # Escalation
     escalation_days_before: int = 3
 
     class Config:
         env_file = ".env"
+        extra = "ignore"
+
+    def get_api_key(self) -> str:
+        return self.llm_api_key or self.meta_api_key or os.getenv("BASETEN_API_KEY", "")
 
 
 settings = Settings()
