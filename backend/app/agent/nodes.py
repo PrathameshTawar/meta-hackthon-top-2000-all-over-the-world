@@ -657,24 +657,35 @@ Return ONLY valid JSON in this exact structure:
 Text:
 {raw_text[:2000]}
 """
-    llm_resp = await _call_llm(prompt)
-    if llm_resp:
-        try:
-            match = re.search(r"\{.*\}", llm_resp, re.DOTALL)
-            if match:
-                parsed = json.loads(match.group())
-                for k in ["amount", "due_date", "payee", "title"]:
-                    if k in parsed and isinstance(parsed[k], dict):
-                        q = parsed[k].get("quote")
-                        if q and q not in raw_text:
-                            parsed[k]["quote"] = None
-                            parsed[k]["value"] = None
-                extracted = parsed
-        except Exception:
-            extracted = None
+    if settings.get_api_key():
+        llm_resp = await _call_llm(prompt)
+        if llm_resp:
+            try:
+                match = re.search(r"\{.*\}", llm_resp, re.DOTALL)
+                if match:
+                    parsed = json.loads(match.group())
+                    for k in ["amount", "due_date", "payee", "title"]:
+                        if k in parsed and isinstance(parsed[k], dict):
+                            q = parsed[k].get("quote")
+                            if q and q not in raw_text:
+                                parsed[k]["quote"] = None
+                                parsed[k]["value"] = None
+                    extracted = parsed
+            except Exception:
+                extracted = None
 
-    if not extracted:
-        extracted = _heuristic_extract(raw_text)
+        if not extracted:
+            # Model was called but extraction failed or unparseable JSON
+            logger.warning("Muse Spark Open extraction failed or unparseable")
+            return {
+                "extracted": {},
+                "confidence": 0.0,
+                "errors": ["Failed to extract fields with Muse model"],
+                "parent_reply": "आम्हाला ही माहिती स्पष्टपणे वाचता आली नाही, कृपया पुन्हा पाठवा.",
+            }
+    else:
+        # No API key configured: do NOT fake model extraction
+        extracted = {}
 
     # Compute confidence: fraction of key fields with both value and verbatim quote
     fields = ["amount", "due_date", "payee", "title"]
