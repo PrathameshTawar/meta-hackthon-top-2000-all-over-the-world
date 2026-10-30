@@ -42,14 +42,14 @@ India's sole earners are running two households from one phone, while ageing par
 
 Evaluated against a synthetic 40-item benchmark (35 test cases) covering Marathi/Hindi utility bills, education loan notices, insurance renewals, voice notes, cross-lingual duplicate pairs (10 items / 5 pairs), and clinical lab reports. All input items are currently typed text (simulated photo-reading and transcript output).
 
-| Test Slice | Items | Metric Evaluated | Target | Keyword Baseline (No AI) | Saath Guardrail | Muse Spark Open Pipeline | Status |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| Test Slice | Items | Metric Evaluated | Target | Keyword Baseline (No AI) | Saath Guardrail | Muse Spark 1.3 (Typed Text) | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Bill & letter photos** | 15 | Field accuracy: amount, due date, payee | 85%+ | 97.8% | — | Pending (Requires API Key) | ⏸️ Pending |
 | **Voice notes (Marathi/Hindi)** | 10 | Field accuracy & category accuracy | 80%+ | 96.7% | — | Pending (Requires API Key) | ⏸️ Pending |
 | **Cross-lingual duplicate pairs** | 10 (5 pairs) | Correctly merged into single task | 5 of 5 | 5 of 5 (100%) | — | Pending (Requires API Key) | ⏸️ Pending |
 | **Medical content & lab reports** | 5 | Guardrail recall: refused diagnostic advice | 5 of 5 | 0 of 5 (0% Refusal, 100% Leaked) | 5 of 5 (100% Refusal) | Pending (Requires API Key) | ⏸️ Pending |
 
-> **Evaluation Transparency:** Running `python -m tests.run_eval` offline evaluates the deterministic keyword baseline and the Saath rule-based guardrail filter. To run live inference against Meta's `Muse Spark Open` model, set `LLM_API_KEY` (Baseten) in your `.env`. Until the real run with the API key, the Muse Spark Open column is marked as Pending in both the documentation and evaluation output rather than reporting unverified numbers.
+> **Evaluation Transparency:** Running `python -m tests.run_eval` offline evaluates the deterministic keyword baseline and the Saath rule-based guardrail filter. To run live inference against Meta's `muse-spark-1.3` model, set `LLM_API_KEY` (Meta API) in your `.env`. Until the real run with the API key, the Muse Spark 1.3 column is marked as Pending in both the documentation and evaluation output rather than reporting unverified numbers.
 
 ---
 
