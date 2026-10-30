@@ -8,10 +8,11 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./saath.db"
     checkpoints_db_path: str = "data/checkpoints.db"
 
-    # Meta AI / Open-Weight Models via Baseten / Meta Model API
-    llm_base_url: str = "https://inference.baseten.co/v1"
+    # Meta AI Model API (Official Meta Endpoint: https://api.meta.ai/v1)
+    # Alternative / Backup: Baseten endpoint "https://inference.baseten.co/v1" with model "meta-models/muse-spark-open-1026"
+    llm_base_url: str = "https://api.meta.ai/v1"
     llm_api_key: str = ""
-    muse_spark_model: str = "meta-models/muse-spark-open-1026"
+    muse_spark_model: str = "muse-spark-1.3"
     muse_voice_model: str = "muse-voice-transcribe-1.0"
     
     # Backwards-compatibility aliases
