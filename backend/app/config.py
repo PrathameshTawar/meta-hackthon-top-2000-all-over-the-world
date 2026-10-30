@@ -32,8 +32,9 @@ class Settings(BaseSettings):
     # WhatsApp Cloud API (Meta)
     whatsapp_token: str = ""
     whatsapp_phone_number_id: str = ""
-    whatsapp_verify_token: str = "saath_meta_hackathon_verify_2026"
+    whatsapp_verify_token: str = ""  # Set via .env for webhook handshake
     whatsapp_app_secret: str = ""
+    whatsapp_api_version: str = "v20.0"  # Configurable API version (e.g. v20.0, v21.0)
 
     # App & Localization
     base_url: str = "http://localhost:8000"
