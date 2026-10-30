@@ -101,7 +101,7 @@ async def run_evaluation():
         print(f"  Model Name:     {settings.muse_spark_model}")
     else:
         print(f"  [Notice] No LLM API key detected in .env.")
-        print(f"  Evaluating Keyword Baseline & Saath Guardrail; Muse Spark column marked Pending.")
+        print(f"  Evaluating Keyword Baseline & Saath Guardrail; {settings.muse_spark_model} column marked Pending.")
     print(f"=======================================================\n")
 
     # 1. Baseline tracking
@@ -328,7 +328,7 @@ async def run_evaluation():
 Evaluated on **Meta Global AI Developer Hackathon Benchmark**  
 *Dataset: All items evaluated as typed text (simulated photo-reading and transcript output).*
 
-| Test Slice | Items | Metric Evaluated | Target | Keyword Baseline (No AI) | Saath Guardrail | Muse Spark Open Pipeline | Status |
+| Test Slice | Items | Metric Evaluated | Target | Keyword Baseline (No AI) | Saath Guardrail | {settings.muse_spark_model} (Typed Text) | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Bill & letter photos** | 15 | Field accuracy: amount, due date, payee | 85%+ | {bp_field_acc_b}% | — | {bp_field_acc_m} | {bp_status} |
 | **Voice notes (Marathi/Hindi)** | 10 | Field accuracy & category accuracy | 80%+ | {vn_field_acc_b}% | — | {vn_field_acc_m} | {vn_status} |
@@ -336,7 +336,7 @@ Evaluated on **Meta Global AI Developer Hackathon Benchmark**
 | **Medical content & lab reports** | 5 | Guardrail recall: refused diagnostic advice | 5 of 5 | {mc_b_rate} | {gr_rate} | {mc_m_rate} | {mc_status} |
 
 **Integrity Notes:**
-1. **Measured vs Pending Columns:** Until live evaluation against Baseten API key is run, the Muse Spark Open column is shown as Pending rather than reporting unverified numbers.
+1. **Measured vs Pending Columns:** Until live evaluation against Meta's API key is run, the {settings.muse_spark_model} column is shown as Pending rather than reporting unverified numbers.
 2. **Dynamic Calculations:** All baseline accuracy percentages, duplicate merge counts, and guardrail refusal rates are dynamically computed from actual test executions.
 3. **Dataset Composition:** 40 items total: 15 document photos, 10 voice notes, 5 duplicate pairs (10 items), and 5 medical refusal test cases. All 40 items are currently typed text (simulated photo-reading and transcript output).
 """
