@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     whatsapp_phone_number_id: str = ""
     whatsapp_verify_token: str = ""  # Set via .env for webhook handshake
     whatsapp_app_secret: str = ""
-    whatsapp_api_version: str = "v20.0"  # Configurable API version (e.g. v20.0, v21.0)
+    whatsapp_api_version: str = "v22.0"  # Current Meta Graph API version (v21.0 or v22.0)
 
     # App & Localization
     base_url: str = "http://localhost:8000"
