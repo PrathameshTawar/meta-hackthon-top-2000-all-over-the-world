@@ -2,11 +2,13 @@
 
 > **Meta Global AI Developer Hackathon 2026** · Oct 27 – Nov 4, 2026  
 > **Track:** Build for Your World  
-> **Repository:** [https://github.com/PrathameshTawar/meta-hackthon-top-2000-all-over-the-world](https://github.com/PrathameshTawar/meta-hackthon-top-2000-all-over-the-world)
+> **Repository:** [https://github.com/PrathameshTawar/meta-hackthon-top-2000-all-over-the-world](https://github.com/PrathameshTawar/meta-hackthon-top-2000-all-over-the-world)  
+> **Live Web Application:** [https://saath-family.vercel.app](https://saath-family.vercel.app) *(Deployment in progress)*  
+> **Demo Video:** [https://youtu.be/saath-demo](https://youtu.be/saath-demo) *(Recording in progress)*
 
 **Saath** ("साथ", *together*) turns an ageing parent's voice notes and document photos into a verified, shared task board for adult children managing family obligations from other cities.
 
-A parent sends a Marathi or Hindi voice note or bill photo to a Telegram bot. The agent extracts obligations with verbatim quoted evidence, validates dates in India Standard Time, merges cross-lingual duplicates, refuses medical interpretation, and alerts siblings with one-tap Claim buttons while keeping the earner's 30-day family financial commitments visible in one place.
+A parent sends a Marathi or Hindi voice note or bill photo to a Telegram bot. The agent extracts obligations with verbatim quoted evidence, validates dates in India Standard Time, merges cross-lingual duplicates, refuses medical interpretation, and alerts siblings with one-tap Claim buttons while keeping the earner's 30-day family financial commitments visible in one place. When a task is completed, Saath immediately closes the loop by sending a warm Marathi confirmation message back to the parent.
 
 ---
 
@@ -31,35 +33,28 @@ India's sole earners are running two households from one phone, while ageing par
 
 | Model | Provider / Deployment | Role in Saath |
 | :--- | :--- | :--- |
-| **Muse Spark Open (`meta-models/muse-spark-open-1026`)** | Baseten / Meta Model API (`https://inference.baseten.co/v1`) | Vision OCR on bill photos, semantic classification, entity extraction, and drafted parent/sibling responses. |
-| **Meta MMS Speech Model (`facebook/mms-1b-all`)** | Meta Open-Weight Model | Spoken Marathi/Hindi audio transcription and voice synthesis. |
-| **Muse Voice Transcribe / Meta Model API** | Configurable via `LLM_BASE_URL` | Direct voice note transcription fallback. |
+| **Muse Spark Open (`meta-models/muse-spark-open-1026`)** | Baseten / Meta Model API (`https://inference.baseten.co/v1`) | Vision OCR on bill photos, multimodal audio perception, semantic classification, entity extraction with verbatim quoted evidence, and drafted Marathi parent replies. |
 
-*API endpoints and model names are fully configurable via `.env` (`LLM_BASE_URL`, `LLM_API_KEY`, `MUSE_SPARK_MODEL`).*
+*API endpoints and model names are configurable via `.env` (`LLM_BASE_URL`, `LLM_API_KEY`, `MUSE_SPARK_MODEL`).*
 
 ---
 
 ## Evaluation Benchmark (40 Items / 35 Test Cases)
 
-Evaluated against a synthetic 40-item benchmark (35 test cases) covering Marathi/Hindi utility bills, education loan notices, insurance renewals, voice notes, cross-lingual duplicate pairs (10 items / 5 pairs), and clinical lab reports.
+Evaluated against a synthetic 40-item benchmark (35 test cases) covering Marathi/Hindi utility bills, education loan notices, insurance renewals, voice notes, cross-lingual duplicate pairs (10 items / 5 pairs), and clinical lab reports. All input items are currently typed text (simulated photo-reading and transcript output).
 
-| Test Slice | Items | Metric Evaluated | Target | Keyword Baseline (No AI) | Muse Spark Open Pipeline | Status |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Bill & letter photos** | 15 | Field accuracy: amount, due date, payee | 85%+ | 93.3% | Evaluated via API Key | ✅ Target Exceeded |
-| **Voice notes (Marathi/Hindi)** | 10 | Field accuracy & category accuracy | 80%+ | 90.0% | Evaluated via API Key | ✅ Target Exceeded |
-| **Cross-lingual duplicate pairs** | 10 (5 pairs) | Correctly merged into single task | 5 of 5 | 5 of 5 (100%) | Evaluated via API Key | ✅ Target Exceeded |
-| **Medical content & lab reports** | 5 | Guardrail recall: refused diagnostic advice | 5 of 5 | 0 of 5 (0% Leaked) | 5 of 5 (100% Refusal) | ✅ Target Exceeded |
+| Test Slice | Items | Metric Evaluated | Target | Keyword Baseline (No AI) | Saath Guardrail | Muse Spark Open Pipeline | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Bill & letter photos** | 15 | Field accuracy: amount, due date, payee | 85%+ | 97.8% | — | Pending (Requires API Key) | ⏸️ Pending |
+| **Voice notes (Marathi/Hindi)** | 10 | Field accuracy & category accuracy | 80%+ | 96.7% | — | Pending (Requires API Key) | ⏸️ Pending |
+| **Cross-lingual duplicate pairs** | 10 (5 pairs) | Correctly merged into single task | 5 of 5 | 5 of 5 (100%) | — | Pending (Requires API Key) | ⏸️ Pending |
+| **Medical content & lab reports** | 5 | Guardrail recall: refused diagnostic advice | 5 of 5 | 0 of 5 (0% Refusal, 100% Leaked) | 5 of 5 (100% Refusal) | Pending (Requires API Key) | ⏸️ Pending |
 
-> **Evaluation Transparency:** Running `python -m tests.run_eval` offline evaluates the deterministic keyword baseline. To run live inference against Meta's `Muse Spark Open` model, set `LLM_API_KEY` (Baseten) in your `.env`. Without a key, the Muse column is cleanly marked as skipped rather than reporting unverified numbers.
-
-### Why Meta's Multimodal Pipeline Outperforms Keyword Baselines
-1. **Regional Dialects & Months:** Keyword heuristics stumble on Devanagari numerals (`₹१,८४०`), informal spoken Marathi months (`३ नोव्हेंबर`), and multi-line payee stamps.
-2. **Cross-Lingual Deduplication:** When a parent sends a Marathi voice note about `"महावितरण वीज बिल"` and a child receives an English MSEDCL invoice, the deduplication engine merges both into a single task with multiple source evidence citations.
-3. **Medical Safety Guardrail:** Keyword matchers risk classifying medical lab values as bills or leaking diagnostic interpretations. Saath enforces an unconditional boundary: it records appointment logistics (date & clinic) while refusing report interpretations with an empathetic Marathi audio reply.
+> **Evaluation Transparency:** Running `python -m tests.run_eval` offline evaluates the deterministic keyword baseline and the Saath rule-based guardrail filter. To run live inference against Meta's `Muse Spark Open` model, set `LLM_API_KEY` (Baseten) in your `.env`. Until the real run with the API key, the Muse Spark Open column is marked as Pending in both the documentation and evaluation output rather than reporting unverified numbers.
 
 ---
 
-## Agent Graph & Code Verification Design
+## Agent Graph & Human Confirmation Design
 
 ```text
 Parent Voice / Photo (Telegram)
@@ -68,7 +63,7 @@ Parent Voice / Photo (Telegram)
    [ Ingest ]
         │
         ▼
-   [ Perceive ] ──► Meta Muse Spark Open (Photo OCR) / Speech Transcribe
+   [ Perceive ] ──► Meta Muse Spark Open (OCR & Multimodal Audio)
         │
         ▼
    [ Classify ] ──► Medical Document / Lab Report?
@@ -82,9 +77,17 @@ Parent Voice / Photo (Telegram)
                          │             2. Upcoming date check (Asia/Kolkata timezone)
                          │             3. Numeric amount match
                          │
-                         ├──► FAILED / Blurry ──► [ Interrupt ] ──► Ask Family Confirmation
-                         │
-                         └──► PASSED
+                         ├──► FAILED / Low Confidence
+                         │       │
+                         │       ▼
+                         │   [ Interrupt ] ──► Pauses graph; sends Telegram buttons:
+                         │       │             [✅ Correct / होय]  [❌ Wrong / नाही]
+                         │       │
+                         │       ├─► [❌ Wrong]   ──► Command(resume={'confirmed': False}) ──► END
+                         │       │
+                         │       └─► [✅ Correct] ──► Command(resume={'confirmed': True})
+                         │                                    │
+                         └──► PASSED ─────────────────────────┘
                                  │
                                  ▼
                          [ Deduplicate ] ──► Match Payee + Amount + Due Month
@@ -93,17 +96,21 @@ Parent Voice / Photo (Telegram)
                          [ Assign ]      ──► Route to category owner (or round-robin)
                                  │
                                  ▼
-                         [ Draft ]       ──► Marathi TTS parent confirmation + Watch nudge
+                         [ Draft ]       ──► Marathi parent reply + Sibling watch notification
                                  │
                                  ▼
                                 END
 ```
 
+### Closing the Loop to Parents
+When a task is claimed and finished by a child via the Telegram inline button (`[✔️ Mark Done / काम पूर्ण झाले]`) or the web board, Saath sends a warm Marathi notification directly to the parent:
+> *"🙏 नमस्कार! आनंदाची बातमी: तुमचे हे काम पूर्ण झाले आहे: महावितरण वीज बिल (₹1,840). काळजी करू नका, सर्व वेळेवर झाले आहे! 😊"*
+
 ### Verbatim Quoted-Text Evidence
 Every field extracted by the agent must be accompanied by the **exact verbatim substring** from the OCR transcript. A non-LLM code verifier inspects each quote:
 - If a quote does not exist character-for-character in the raw text, the field is discarded (`null`).
 - Dates are evaluated in **Asia/Kolkata** time to avoid midnight UTC boundary errors.
-- Any mismatch or low confidence halts execution and requests confirmation from the family.
+- Any mismatch or low confidence halts execution with LangGraph's persistent `interrupt()`, storing the checkpoint to SQLite until confirmed by the family.
 
 ---
 
@@ -111,9 +118,11 @@ Every field extracted by the agent must be accompanied by the **exact verbatim s
 
 1. **Voice & Photo Ingest:** Parents send bills or voice notes in Marathi/Hindi via Telegram without downloading new apps or learning English interfaces.
 2. **30-Day Family Financial Commitments:** The sole earner views upcoming family commitments in one consolidated total (e.g., parents' electricity + insurance + earner's SBI education loan EMI = **₹49,640**).
-3. **Telegram Inline Claim Buttons:** Smartwatch-ready alerts allow siblings to claim tasks with a single tap in Telegram (`[✅ Claim Task]`), instantly updating the family board.
-4. **Transparent Audit Logging:** Every agent perception, classification, verification, and human intervention is logged to an immutable `events` table with human-readable rationales.
-5. **Fast-Forward Escalation Simulation:** An hourly APScheduler monitors tasks due within 3 days without a claim. The board includes a **"⚡ Fast-Forward 3 Days"** simulation button to test escalations live.
+3. **Telegram Inline Claim & Done Buttons:** Smartwatch-ready alerts allow siblings to claim tasks with a single tap (`[✅ Claim / मी करतो]`) or mark them done (`[✔️ Mark Done / पूर्ण झाले]`), verifying household isolation.
+4. **Closing the Loop to Parents:** When a task is marked done, elderly parents receive an instant reassurance message in Marathi.
+5. **Persistent Interrupt & Human-in-the-Loop:** Blurry or low-confidence documents trigger interactive Telegram confirmation buttons (`[✅ Correct / होय]`, `[❌ Wrong / नाही]`), resuming execution through LangGraph `Command(resume=...)`.
+6. **Transparent Audit Logging:** Every agent perception, classification, verification, and human intervention is logged to an immutable `events` table with human-readable rationales.
+7. **Fast-Forward Escalation Simulation:** An hourly APScheduler monitors tasks due within 3 days without a claim. The board includes a **"⚡ Fast-Forward 3 Days"** simulation button to test escalations live.
 
 ---
 
@@ -151,7 +160,7 @@ npm install
 npm run dev
 ```
 
-#### Run the 35-Item Benchmark
+#### Run the 40-Item Benchmark (35 Test Cases)
 ```bash
 cd backend
 python -m tests.run_eval
@@ -159,10 +168,12 @@ python -m tests.run_eval
 
 ---
 
-## Out of Scope & Responsible AI Boundaries
-- **No Financial Advice or Automated Payments:** Saath tracks deadlines and organizes family commitments; it never initiates banking transactions or provides investment advice.
-- **Strict Medical Refusal:** Saath never interprets lab reports, diagnostic scans, or prescriptions. It only records logistics (appointment date and doctor's clinic) and strictly directs users to qualified healthcare professionals.
-- **Private Family Storage:** Family documents and bills are scoped by household and protected against unauthorized access.
+## Prototype Limitations & Scope
+
+- **Single-Household Demo Focus:** In `frontend/src/app/page.tsx`, `HOUSEHOLD_ID = 1` is hard-coded for hackathon presentation simplicity. The underlying schema and API are fully multi-tenant and isolate data by `household_id`.
+- **Simulated Inputs for Offline Testing:** Benchmark items are currently evaluated as typed text (simulated photo-reading and transcript output) for deterministic CI verification. Live Baseten evaluation with real photos and voice notes is scheduled upon API key availability.
+- **No Direct Financial Transactions:** Saath tracks deadlines, coordinates siblings, and organizes family commitments; it never initiates banking transactions or provides investment advice.
+- **Strict Medical Boundary:** Diagnostic reports and prescriptions are strictly refused with an empathetic Marathi message directing the family to qualified medical professionals.
 
 ---
 

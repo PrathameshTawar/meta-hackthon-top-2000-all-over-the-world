@@ -5,13 +5,22 @@ Flow:
   ingest → perceive → classify → [medical?] → guardrail (end)
                                        ↓
                                     extract → verify → [low confidence?] → interrupt (ask family)
-                                                 ↓
-                                            deduplicate → assign → draft → END
+                                                 ↓                                 │
+                                            deduplicate ◄── (confirmed: True) ─────┤
+                                                 │                                 │
+                                              assign                   (confirmed: False) ──► END
+                                                 │
+                                               draft → END
 """
+import os
+import logging
+from typing import Optional, Any
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.types import interrupt, Command
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from app.agent.state import AgentState
+from app.config import settings
 from app.agent.nodes import (
     node_ingest,
     node_perceive,
@@ -23,6 +32,8 @@ from app.agent.nodes import (
     node_assign,
     node_draft,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def route_after_classify(state: AgentState) -> str:
@@ -44,18 +55,44 @@ def route_after_guardrail(state: AgentState) -> str:
     return END
 
 
-def node_interrupt(state: AgentState) -> dict:
+async def node_interrupt(state: AgentState) -> dict:
     """
-    LangGraph interrupt node.
-    The graph pauses here and the confirmation_question is sent to the family.
-    When they reply, the graph resumes from this node with their answer.
-    In the demo, this is triggered automatically for blurry or low-confidence inputs.
+    LangGraph persistent interrupt node.
+    Pauses execution via real langgraph.types.interrupt().
+    When family taps [✅ Correct] or [❌ Wrong] in Telegram,
+    execution resumes from here with Command(resume={'confirmed': True/False}).
     """
-    # In a real deployment, langgraph.interrupt() would pause execution.
-    # Here we return the question and mark that we're waiting.
+    question = state.get(
+        "confirmation_question",
+        "काही माहिती अस्पष्ट आहे. कृपया पुष्टी करा: ही माहिती बरोबर आहे का?"
+    )
+    # Real LangGraph interrupt() pauses graph execution and saves state to SQLite checkpointer
+    user_response = interrupt(question)
+
+    confirmed = False
+    if isinstance(user_response, dict):
+        confirmed = bool(user_response.get("confirmed", False))
+    elif isinstance(user_response, bool):
+        confirmed = user_response
+    elif isinstance(user_response, str):
+        confirmed = user_response.lower() in ("yes", "होय", "true", "correct")
+
+    logger.info(f"Agent resumed from interrupt with confirmation: {confirmed}")
     return {
-        "awaiting_confirmation": True,
+        "awaiting_confirmation": False,
+        "confirmation_confirmed": confirmed,
+        "verify_passed": confirmed,
     }
+
+
+def route_after_interrupt(state: AgentState) -> str:
+    """
+    If family confirms the information is correct, continue to deduplicate & assign.
+    If family marks it wrong, terminate graph execution gracefully.
+    """
+    if state.get("confirmation_confirmed"):
+        return "deduplicate"
+    return END
 
 
 def build_graph() -> StateGraph:
@@ -93,8 +130,13 @@ def build_graph() -> StateGraph:
         {"interrupt": "interrupt", "deduplicate": "deduplicate"},
     )
 
-    # interrupt → graph pauses; on resume it continues to deduplicate
-    graph.add_edge("interrupt", "deduplicate")
+    # After interrupt: resume proceeds conditionally based on human confirmation
+    graph.add_conditional_edges(
+        "interrupt",
+        route_after_interrupt,
+        {"deduplicate": "deduplicate", END: END},
+    )
+
     graph.add_edge("deduplicate", "assign")
     graph.add_edge("assign", "draft")
     graph.add_edge("draft", END)
@@ -102,6 +144,61 @@ def build_graph() -> StateGraph:
     return graph
 
 
-# Compile once at import time; use MemorySaver for dev (swap for Postgres checkpointer in prod)
-checkpointer = MemorySaver()
-compiled_graph = build_graph().compile(checkpointer=checkpointer, interrupt_before=["interrupt"])
+# ---------------------------------------------------------------------------
+# Persistent SQLite Checkpointer Management
+# ---------------------------------------------------------------------------
+_checkpointer_cm: Optional[Any] = None
+_checkpointer: Optional[AsyncSqliteSaver] = None
+_compiled_graph: Optional[Any] = None
+
+
+async def get_checkpointer() -> AsyncSqliteSaver:
+    global _checkpointer_cm, _checkpointer
+    if _checkpointer is None:
+        db_path = getattr(settings, "checkpoints_db_path", "data/checkpoints.db")
+        dir_name = os.path.dirname(os.path.abspath(db_path))
+        if dir_name:
+            os.makedirs(dir_name, exist_ok=True)
+        _checkpointer_cm = AsyncSqliteSaver.from_conn_string(db_path)
+        _checkpointer = await _checkpointer_cm.__aenter__()
+        await _checkpointer.setup()
+    return _checkpointer
+
+
+async def close_checkpointer():
+    global _checkpointer_cm, _checkpointer, _compiled_graph
+    if _checkpointer_cm is not None:
+        try:
+            await _checkpointer_cm.__aexit__(None, None, None)
+        except Exception:
+            pass
+        _checkpointer_cm = None
+        _checkpointer = None
+        _compiled_graph = None
+
+
+async def get_compiled_graph():
+    global _compiled_graph
+    if _compiled_graph is None:
+        checkpointer = await get_checkpointer()
+        _compiled_graph = build_graph().compile(checkpointer=checkpointer)
+    return _compiled_graph
+
+
+class LazyCompiledGraph:
+    """Backward-compatible proxy allowing compiled_graph.astream(...) and ainvoke(...) anywhere."""
+    async def astream(self, *args, **kwargs):
+        g = await get_compiled_graph()
+        async for chunk in g.astream(*args, **kwargs):
+            yield chunk
+
+    async def ainvoke(self, *args, **kwargs):
+        g = await get_compiled_graph()
+        return await g.ainvoke(*args, **kwargs)
+
+    async def aget_state(self, *args, **kwargs):
+        g = await get_compiled_graph()
+        return await g.aget_state(*args, **kwargs)
+
+
+compiled_graph = LazyCompiledGraph()

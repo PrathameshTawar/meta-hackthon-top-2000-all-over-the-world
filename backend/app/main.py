@@ -6,6 +6,7 @@ from app.config import settings
 from app.db.session import init_db
 from app.db.seed import seed_data
 from app.scheduler.escalation import start_scheduler
+from app.agent.graph import close_checkpointer
 from app.api import artifacts, tasks, members, households, webhooks, events, admin
 
 
@@ -17,6 +18,7 @@ async def lifespan(app: FastAPI):
     yield
     if scheduler:
         scheduler.shutdown()
+    await close_checkpointer()
 
 
 app = FastAPI(

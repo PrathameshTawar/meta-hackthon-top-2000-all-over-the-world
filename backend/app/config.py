@@ -6,6 +6,7 @@ import os
 class Settings(BaseSettings):
     # Database (defaults to local SQLite for zero-setup dev & eval; PostgreSQL in production)
     database_url: str = "sqlite+aiosqlite:///./saath.db"
+    checkpoints_db_path: str = "data/checkpoints.db"
 
     # Meta AI / Open-Weight Models via Baseten / Meta Model API
     llm_base_url: str = "https://inference.baseten.co/v1"

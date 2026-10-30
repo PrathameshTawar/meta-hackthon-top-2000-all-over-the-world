@@ -7,9 +7,10 @@ sqlalchemy==2.0.35
 asyncpg==0.29.0
 alembic==1.13.3
 
-# Agent
-langgraph==0.2.28
-langchain-core==0.3.10
+# Agent & Persistent Checkpoints
+langgraph>=0.2.28
+langchain-core>=0.3.10
+langgraph-checkpoint-sqlite>=3.0.0
 
 # AI Models (Meta open-weight models via Baseten / Meta Model APIs)
 openai>=1.50.0

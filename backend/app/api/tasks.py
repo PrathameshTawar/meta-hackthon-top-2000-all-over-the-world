@@ -83,11 +83,23 @@ async def update_task(task_id: int, update: TaskUpdate, db: AsyncSession = Depen
     task = await db.get(Task, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+    status_changed_to_done = False
     if update.status:
-        task.status = TaskStatus(update.status)
+        new_status = TaskStatus(update.status)
+        if new_status == TaskStatus.done and task.status != TaskStatus.done:
+            status_changed_to_done = True
+        task.status = new_status
     if update.assignee_id is not None:
         task.assignee_id = update.assignee_id
     task.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(task)
+
+    if status_changed_to_done:
+        try:
+            from app.api.webhooks import notify_parents_task_done
+            await notify_parents_task_done(task, completed_by_name="कुटुंबातील सदस्य (वेब बोर्ड)")
+        except Exception:
+            pass
+
     return task

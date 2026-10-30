@@ -32,12 +32,15 @@ class AgentState(TypedDict, total=False):
     # --- interrupt ---
     awaiting_confirmation: bool
     confirmation_question: str
+    confirmation_confirmed: Optional[bool]
 
     # --- deduplicate ---
     existing_task_id: Optional[int]  # set if this is a duplicate
+    dedupe_key: Optional[str]
 
     # --- assign ---
     assignee_id: Optional[int]
+    task_id: Optional[int]
 
     # --- draft ---
     parent_reply: str           # Marathi message back to parent

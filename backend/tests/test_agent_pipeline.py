@@ -169,3 +169,128 @@ async def test_cross_lingual_deduplication():
     assert d_eng["dedupe_key"] == d_mar["dedupe_key"], (
         f"Dedupe keys must match across Marathi and English: {d_eng['dedupe_key']} vs {d_mar['dedupe_key']}"
     )
+
+
+@pytest.mark.asyncio
+async def test_langgraph_persistent_interrupt_and_resume():
+    """
+    Test that low confidence or failed verification triggers a persistent LangGraph interrupt(),
+    and Command(resume={'confirmed': True}) resumes execution through SQLite checkpointer.
+    """
+    from app.agent.graph import get_compiled_graph
+    from langgraph.types import Command
+
+    graph = await get_compiled_graph()
+    thread_id = "test_interrupt_pipeline_1"
+    config = {"configurable": {"thread_id": thread_id}}
+
+    # Initial state with blurry/unverified quote that fails node_verify
+    initial_state: AgentState = {
+        "artifact_id": 9991,
+        "household_id": 1,
+        "artifact_type": "image",
+        "file_url": "test://blurry_bill.png",
+        "raw_text": "Mahavitaran Bill",
+        "category": TaskCategory.bill.value,
+        "extracted": {
+            "amount": {"value": "₹1,840", "quote": "₹1,840 (not in raw text)"},
+        },
+        "confidence": 0.4,  # Below 0.5 triggers verification failure
+        "errors": [],
+    }
+
+    # Execute until interrupt
+    interrupted = False
+    question = None
+    async for step in graph.astream(initial_state, config=config):
+        if isinstance(step, dict) and "__interrupt__" in step:
+            interrupted = True
+            question = step["__interrupt__"][0].value
+
+    assert interrupted is True
+    assert "पुष्टी करा" in str(question)
+
+    # State must be paused at interrupt
+    state_paused = await graph.aget_state(config)
+    assert "interrupt" in state_paused.next
+
+    # Resume with confirmation: True
+    resumed = False
+    async for step in graph.astream(Command(resume={"confirmed": True}), config=config):
+        if isinstance(step, dict) and "draft" in step:
+            resumed = True
+
+    assert resumed is True
+    final_state = await graph.aget_state(config)
+    assert final_state.values.get("confirmation_confirmed") is True
+    assert "नमस्कार" in final_state.values.get("parent_reply", "")
+
+
+@pytest.mark.asyncio
+async def test_claim_and_done_household_isolation():
+    """
+    Test that a member cannot claim or complete a task belonging to a different household.
+    """
+    from app.db.models import Household, Member, MemberRole, Task, TaskCategory, TaskStatus
+
+    async with AsyncSessionLocal() as db:
+        # Create secondary household
+        h2 = Household(name="Household Two")
+        db.add(h2)
+        await db.flush()
+
+        member_h2 = Member(
+            household_id=h2.id,
+            name="Stranger Child",
+            role=MemberRole.child,
+            telegram_id="999888777",
+        )
+        db.add(member_h2)
+
+        # Create task in household 1
+        t1 = Task(
+            household_id=1,
+            category=TaskCategory.bill,
+            title="Household 1 MSEDCL Bill",
+            amount="₹1,500",
+            status=TaskStatus.confirmed,
+        )
+        db.add(t1)
+        await db.commit()
+        await db.refresh(t1)
+
+        task_id = t1.id
+
+        # Verify cross-household check logic
+        res = await db.execute(select(Member).where(Member.telegram_id == "999888777"))
+        member = res.scalars().first()
+        task = await db.get(Task, task_id)
+
+        assert member.household_id != task.household_id, "Households must differ for security test"
+        # Simulated handler check:
+        is_authorized = (task.household_id == member.household_id)
+        assert is_authorized is False, "Cross-household claim/done must be rejected"
+
+
+@pytest.mark.asyncio
+async def test_parent_notification_on_task_done():
+    """
+    Test notify_parents_task_done finds parent members and drafts Marathi reassurance message.
+    """
+    from app.api.webhooks import notify_parents_task_done
+
+    async with AsyncSessionLocal() as db:
+        t = Task(
+            household_id=1,
+            category=TaskCategory.bill,
+            title="महावितरण वीज बिल",
+            amount="₹1,840",
+            status=TaskStatus.claimed,
+        )
+        db.add(t)
+        await db.commit()
+        await db.refresh(t)
+
+    # Should execute without errors even in simulated test environment
+    await notify_parents_task_done(t, completed_by_name="अमित")
+

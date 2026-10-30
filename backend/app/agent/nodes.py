@@ -954,7 +954,7 @@ async def node_assign(state: AgentState) -> dict:
         reason=f"Assigned to {assignee.name if assignee else 'Unassigned'}",
         payload={"assignee_id": assignee_id, "category": category.value},
     )
-    return {"assignee_id": assignee_id}
+    return {"assignee_id": assignee_id, "task_id": task_id}
 
 
 # ---------------------------------------------------------------------------

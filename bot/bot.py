@@ -38,7 +38,10 @@ async def send_telegram_nudge_with_claim(chat_id: str | int, task_id: int, title
     reply_markup = {
         "inline_keyboard": [
             [
-                {"text": "✅ Claim Task", "callback_data": f"claim_{task_id}"},
+                {"text": "✅ Claim / मी करतो", "callback_data": f"claim:{task_id}"},
+                {"text": "✔️ Done / पूर्ण झाले", "callback_data": f"done:{task_id}"},
+            ],
+            [
                 {"text": "📋 View Board", "url": f"http://localhost:3000"},
             ]
         ]
@@ -54,38 +57,6 @@ async def send_telegram_nudge_with_claim(chat_id: str | int, task_id: int, title
                 "reply_markup": reply_markup,
             },
         )
-
-
-async def handle_callback_query(callback: dict):
-    """Handle inline button clicks like 'claim_123'."""
-    cb_id = callback["id"]
-    data = callback.get("data", "")
-    user_id = callback["from"]["id"]
-    chat_id = callback["message"]["chat"]["id"]
-
-    if data.startswith("claim_"):
-        task_id = int(data.split("_")[1])
-        logger.info(f"User {user_id} clicked Claim on task {task_id}")
-
-        # Update task in backend
-        try:
-            async with httpx.AsyncClient(timeout=10) as client:
-                res = await client.patch(
-                    f"{BACKEND_URL}/tasks/{task_id}",
-                    json={"status": "claimed"},
-                )
-                if res.status_code == 200:
-                    # Answer callback
-                    await client.post(
-                        f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery",
-                        json={"callback_query_id": cb_id, "text": "✅ You claimed this task! Board updated."},
-                    )
-                    await client.post(
-                        f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-                        json={"chat_id": chat_id, "text": f"🎉 You claimed Task #{task_id}. Marked on your shared family board."},
-                    )
-        except Exception as exc:
-            logger.error(f"Failed to claim task: {exc}")
 
 
 async def poll_telegram():
@@ -105,14 +76,14 @@ async def poll_telegram():
                     for update in data.get("result", []):
                         offset = update["update_id"] + 1
 
-                        if "callback_query" in update:
-                            await handle_callback_query(update["callback_query"])
-                        elif "message" in update:
-                            # Forward message to backend webhook endpoint
+                        # Forward all updates (messages, callback queries) to backend webhook
+                        try:
                             await client.post(
                                 f"{BACKEND_URL}/webhook/telegram",
                                 json=update,
                             )
+                        except Exception as post_err:
+                            logger.error(f"Failed to forward update to backend: {post_err}")
             except asyncio.CancelledError:
                 break
             except Exception as e:
