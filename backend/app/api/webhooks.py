@@ -42,12 +42,13 @@ whatsapp_router = APIRouter(prefix="/chat", tags=["whatsapp"])
 router = telegram_router  # Fallback backward compatibility
 
 # Template language mapping:
-# - saath_new_task and saath_task_escalation are sent to siblings (English en_US)
+# - saath_new_task, saath_task_escalation, and saath_please_check are sent to siblings (English en_US)
 # - saath_task_done is sent to parents (Marathi mr)
 TEMPLATE_LANGUAGES = {
     "saath_new_task": "en_US",
     "saath_task_escalation": "en_US",
     "saath_task_done": "mr",
+    "saath_please_check": "en_US",
 }
 
 
@@ -120,6 +121,7 @@ async def _send_whatsapp_message(
     template_name: Optional[str] = None,
     template_params: Optional[list] = None,
     template_button_payload: Optional[str] = None,
+    template_button_payloads: Optional[list[str]] = None,
     template_language: Optional[str] = None,
     last_inbound_at: Optional[datetime] = None,
 ) -> bool:
@@ -131,7 +133,7 @@ async def _send_whatsapp_message(
     - Falls back to template retry on error 131047.
     - Strips line breaks from all template parameters (WhatsApp Cloud API rejects parameters containing \r or \n).
     - Maps template names to approved language codes (e.g. en_US for sibling templates, mr for parent templates).
-    - Attaches quick-reply button payload (e.g. claim:<task_id>) when provided.
+    - Attaches quick-reply button payloads (e.g. claim:<task_id> or confirm_yes / confirm_no) when provided.
     """
     if not settings.whatsapp_token or not settings.whatsapp_phone_number_id:
         logger.info(f"[WHATSAPP SIMULATED to {to_phone}]: {text} | Buttons: {buttons} | Template: {template_name}")
@@ -153,7 +155,13 @@ async def _send_whatsapp_message(
         if (now_utc - last_inbound_naive) > timedelta(hours=24):
             is_outside_24h = True
 
-    def _build_template_payload(t_name: str, t_params: Optional[list], t_btn_payload: Optional[str], t_lang: Optional[str]) -> dict:
+    btn_payloads = []
+    if template_button_payloads:
+        btn_payloads = list(template_button_payloads)
+    elif template_button_payload:
+        btn_payloads = [template_button_payload]
+
+    def _build_template_payload(t_name: str, t_params: Optional[list], t_btn_payloads: list[str], t_lang: Optional[str]) -> dict:
         lang_code = t_lang or TEMPLATE_LANGUAGES.get(t_name, "mr")
         cleaned_params = [_clean_template_param(p) for p in (t_params or [text[:60]])]
         components = [
@@ -162,12 +170,12 @@ async def _send_whatsapp_message(
                 "parameters": [{"type": "text", "text": p} for p in cleaned_params],
             }
         ]
-        if t_btn_payload:
+        for idx, payload in enumerate(t_btn_payloads[:3]):
             components.append({
                 "type": "button",
                 "sub_type": "quick_reply",
-                "index": "0",
-                "parameters": [{"type": "payload", "payload": t_btn_payload}],
+                "index": str(idx),
+                "parameters": [{"type": "payload", "payload": payload}],
             })
         return {
             "messaging_product": "whatsapp",
@@ -182,7 +190,7 @@ async def _send_whatsapp_message(
 
     # If outside 24h window and template is provided, send template directly
     if is_outside_24h and template_name:
-        template_payload = _build_template_payload(template_name, template_params, template_button_payload, template_language)
+        template_payload = _build_template_payload(template_name, template_params, btn_payloads, template_language)
         async with httpx.AsyncClient(timeout=10) as client:
             try:
                 resp = await client.post(url, json=template_payload, headers=headers)
@@ -227,7 +235,7 @@ async def _send_whatsapp_message(
                 # Fallback retry if 131047 (outside 24h window) and template is specified
                 if "131047" in err_body and template_name:
                     logger.info(f"Retrying outside 24h window with template '{template_name}' for {to_phone}")
-                    retry_payload = _build_template_payload(template_name, template_params, template_button_payload, template_language)
+                    retry_payload = _build_template_payload(template_name, template_params, btn_payloads, template_language)
                     retry_resp = await client.post(url, json=retry_payload, headers=headers)
                     if retry_resp.status_code != 200:
                         logger.error(f"WhatsApp template fallback also failed: {retry_resp.text}")
@@ -247,6 +255,7 @@ async def notify(
     template_name: Optional[str] = None,
     template_params: Optional[list] = None,
     template_button_payload: Optional[str] = None,
+    template_button_payloads: Optional[list[str]] = None,
     template_language: Optional[str] = None,
     reply_markup: Optional[dict] = None,
 ) -> bool:
@@ -254,7 +263,7 @@ async def notify(
     Unified notification dispatch function from Step 6 of the Build Guide.
     Sends alerts to a member across Telegram and/or WhatsApp.
     Respects WhatsApp's 24-hour customer service window based on member.last_inbound_at.
-    If outside 24h, sends an approved Meta template (saath_new_task, saath_task_escalation, saath_task_done).
+    If outside 24h, sends an approved Meta template (saath_new_task, saath_task_escalation, saath_task_done, saath_please_check).
     """
     success = True
     if member.telegram_id:
@@ -267,6 +276,7 @@ async def notify(
             template_name=template_name,
             template_params=template_params,
             template_button_payload=template_button_payload,
+            template_button_payloads=template_button_payloads,
             template_language=template_language,
             last_inbound_at=member.last_inbound_at,
         )
@@ -448,6 +458,10 @@ async def _run_agent(artifact_id: int, household_id: int, artifact_type: str, fi
                     member=target_sibling,
                     text=confirm_text,
                     buttons=wa_buttons,
+                    template_name="saath_please_check",
+                    template_params=[_clean_template_param(interrupted_question[:60])],
+                    template_button_payloads=[f"confirm_yes:{artifact_id}", f"confirm_no:{artifact_id}"],
+                    template_language="en_US",
                     reply_markup=tg_reply_markup,
                 )
             else:
@@ -455,7 +469,15 @@ async def _run_agent(artifact_id: int, household_id: int, artifact_type: str, fi
                 if channel == "telegram":
                     await _send_telegram_message(chat_id, confirm_text, reply_markup=tg_reply_markup)
                 else:
-                    await _send_whatsapp_message(chat_id, confirm_text, buttons=wa_buttons)
+                    await _send_whatsapp_message(
+                        chat_id,
+                        confirm_text,
+                        buttons=wa_buttons,
+                        template_name="saath_please_check",
+                        template_params=[_clean_template_param(interrupted_question[:60])],
+                        template_button_payloads=[f"confirm_yes:{artifact_id}", f"confirm_no:{artifact_id}"],
+                        template_language="en_US",
+                    )
             return
 
         if final_state:
