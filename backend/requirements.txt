@@ -3,33 +3,33 @@ fastapi==0.115.0
 uvicorn[standard]==0.30.6
 
 # Database
-sqlalchemy==2.0.35
+sqlalchemy==2.1.6
 asyncpg==0.29.0
 alembic==1.13.3
 
 # Agent & Persistent Checkpoints
-langgraph>=0.2.28
-langchain-core>=0.3.10
-langgraph-checkpoint-sqlite>=3.0.0
+langgraph==1.2.18
+langchain-core==1.7.3
+langgraph-checkpoint-sqlite==3.1.2
 
 # AI Models (Meta open-weight models via Baseten / Meta Model APIs)
-openai>=1.50.0
+openai==3.41.0
 
 # HTTP client
 httpx==0.27.2
 
 # Scheduler & Timezones
 apscheduler==3.10.4
-pytz>=2024.1
+pytz==2026.5
 
 # Config
 pydantic-settings==2.5.2
 
 # Utilities
 python-multipart==0.0.12
-greenlet>=3.0.0
-aiosqlite>=0.20.0
+greenlet==3.5.6
+aiosqlite==0.22.1
 
 # Testing & Eval
-pytest>=8.0.0
-pytest-asyncio>=0.23.0
+pytest==9.2.0
+pytest-asyncio==1.4.1

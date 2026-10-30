@@ -250,12 +250,13 @@ async def test_claim_and_done_household_isolation():
 
         # Member belonging exclusively to Household 2
         unique_tg = f"stranger_{uuid.uuid4().hex[:8]}"
+        unique_phone = f"+9199{uuid.uuid4().int % 100000000:08d}"
         member_h2 = Member(
             household_id=h2.id,
             name="Stranger Child",
             role=MemberRole.child,
             telegram_id=unique_tg,
-            phone="+919999999999",
+            phone=unique_phone,
         )
         db.add(member_h2)
 
