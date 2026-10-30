@@ -178,26 +178,27 @@ python -m tests.run_eval
 
 ## Meta WhatsApp Message Templates Setup
 
-To reproduce the WhatsApp notifications in Meta Business Manager / WhatsApp Manager, create and submit these 3 message templates:
+To reproduce the WhatsApp notifications in Meta Business Manager / WhatsApp Manager, create and submit these 4 message templates:
 
 | Template Name | Category | Language | Exact Body Wording & Parameters | Buttons / Payloads |
 | :--- | :--- | :--- | :--- | :--- |
 | `saath_new_task` | UTILITY | English (US) (`en_US`) | `New family task: {{1}}. Action required: {{2}}. View board to coordinate.` | Quick Reply: `Claim Task` (payload: `claim:<task_id>`) |
 | `saath_task_escalation` | UTILITY | English (US) (`en_US`) | `Urgent family reminder: {{1}} is due in {{2}} and is still unclaimed. Please claim and settle.` | Quick Reply: `Claim Task` (payload: `claim:<task_id>`) |
 | `saath_task_done` | UTILITY | Marathi (`mr`) | `नमस्कार! आनंदाची बातमी: तुमचे हे काम पूर्ण झाले आहे: {{1}}. पूर्ण करणारा: {{2}}. काळजी करू नका, सर्व वेळेवर झाले आहे!` | None (Informational loop closure) |
+| `saath_please_check` | UTILITY | English (US) (`en_US`) | `Please check extracted obligation details: {{1}}. Is this accurate?` | Button 0: `Correct (होय)` (`confirm_yes:<artifact_id>`), Button 1: `Wrong (नाही)` (`confirm_no:<artifact_id>`) |
 
 > **Key Template Implementation Notes:**
 > 1. **No Line Breaks:** Meta rejects template parameter values with newline characters (`\r` or `\n`). The backend sanitizes all parameters before transmission via `_clean_template_param`.
-> 2. **Explicit Language Mapping:** Sibling alerts (`saath_new_task`, `saath_task_escalation`) use `en_US` matching approved English templates. Parent completion notices (`saath_task_done`) use `mr` (Marathi).
-> 3. **Quick-Reply Template Buttons:** Outside WhatsApp's 24-hour customer service window, sibling templates are sent with a quick-reply button payload (`claim:<task_id>`). Meta delivers these as `msg["type"] == "button"` containing `msg["button"]["payload"]`, which Saath parses and processes with identical household isolation and deduplication as regular interactive buttons.
+> 2. **Explicit Language Mapping:** Sibling alerts (`saath_new_task`, `saath_task_escalation`, `saath_please_check`) use `en_US` matching approved English templates. Parent completion notices (`saath_task_done`) use `mr` (Marathi).
+> 3. **Quick-Reply Template Buttons:** Outside WhatsApp's 24-hour customer service window, sibling alerts and verification questions are dispatched via approved templates with quick-reply payloads (`claim:<task_id>`, `confirm_yes:<artifact_id>`, `confirm_no:<artifact_id>`). Meta delivers these as `msg["type"] == "button"` containing `msg["button"]["payload"]`, which Saath parses and processes with identical household isolation and deduplication as regular interactive buttons.
 
 ---
 
 ## Authorship & Team
 
-- **Sole Developer & Contributor:** Prathamesh Taware
-- **GitHub:** [@PrathameshTawar](https://github.com/PrathameshTawar)
-- **Hackathon Registration:** Solo entrant matching commit history.
+- **Submitted by / Sole Developer:** Prathamesh Taware ([@PrathameshTawar](https://github.com/PrathameshTawar))
+- **Email:** `tawareprathamesh7@gmail.com`
+- **Hackathon Status:** Solo entrant for Meta Global AI Developer Hackathon 2026, matching GitHub commit author and repository ownership.
 
 ---
 
