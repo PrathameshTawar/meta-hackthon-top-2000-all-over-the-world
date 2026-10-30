@@ -3,8 +3,6 @@
 > **Meta Global AI Developer Hackathon 2026** · Oct 27 – Nov 4, 2026  
 > **Track:** Build for Your World  
 > **Repository:** [https://github.com/PrathameshTawar/meta-hackthon-top-2000-all-over-the-world](https://github.com/PrathameshTawar/meta-hackthon-top-2000-all-over-the-world)  
-> **Live Web Application:** [https://saath-family.vercel.app](https://saath-family.vercel.app) *(Deployment in progress)*  
-> **Demo Video:** [https://youtu.be/saath-demo](https://youtu.be/saath-demo) *(Recording in progress)*
 
 **Saath** ("साथ", *together*) turns an ageing parent's voice notes and document photos into a verified, shared task board for adult children managing family obligations from other cities.
 
@@ -31,11 +29,12 @@ India's sole earners are running two households from one phone, while ageing par
 
 ## Meta AI Models Used
 
-| Model | Provider / Deployment | Role in Saath |
+| Model | Provider / Endpoint | Role in Saath |
 | :--- | :--- | :--- |
-| **Muse Spark Open (`meta-models/muse-spark-open-1026`)** | Baseten / Meta Model API (`https://inference.baseten.co/v1`) | Vision OCR on bill photos, multimodal audio perception, semantic classification, entity extraction with verbatim quoted evidence, and drafted Marathi parent replies. |
+| **Muse Voice Transcribe (`muse-voice-transcribe-1.0`)** | Baseten / Meta Model API (`POST /v1/asr/transcribe`) | Dedicated ASR transcribing 16 kHz mono WAV voice notes in spoken Marathi and Hindi with zero audio degradation. |
+| **Muse Spark Open (`meta-models/muse-spark-open-1026`)** | Baseten / Meta Model API (`POST /v1/chat/completions`) | Vision OCR on bill photos, semantic classification, entity extraction with verbatim quoted evidence, status inquiry intent classification, and drafted Marathi parent replies. |
 
-*API endpoints and model names are configurable via `.env` (`LLM_BASE_URL`, `LLM_API_KEY`, `MUSE_SPARK_MODEL`).*
+*API endpoints and model names are configurable via `.env` (`LLM_BASE_URL`, `LLM_API_KEY`, `MUSE_SPARK_MODEL`, `MUSE_VOICE_MODEL`).*
 
 ---
 
@@ -174,6 +173,31 @@ python -m tests.run_eval
 - **Simulated Inputs for Offline Testing:** Benchmark items are currently evaluated as typed text (simulated photo-reading and transcript output) for deterministic CI verification. Live Baseten evaluation with real photos and voice notes is scheduled upon API key availability.
 - **No Direct Financial Transactions:** Saath tracks deadlines, coordinates siblings, and organizes family commitments; it never initiates banking transactions or provides investment advice.
 - **Strict Medical Boundary:** Diagnostic reports and prescriptions are strictly refused with an empathetic Marathi message directing the family to qualified medical professionals.
+
+---
+
+## Meta WhatsApp Message Templates Setup
+
+To reproduce the WhatsApp notifications in Meta Business Manager / WhatsApp Manager, create and submit these 3 message templates:
+
+| Template Name | Category | Language | Exact Body Wording & Parameters | Buttons / Payloads |
+| :--- | :--- | :--- | :--- | :--- |
+| `saath_new_task` | UTILITY | English (US) (`en_US`) | `New family task: {{1}}. Action required: {{2}}. View board to coordinate.` | Quick Reply: `Claim Task` (payload: `claim:<task_id>`) |
+| `saath_task_escalation` | UTILITY | English (US) (`en_US`) | `Urgent family reminder: {{1}} is due in {{2}} and is still unclaimed. Please claim and settle.` | Quick Reply: `Claim Task` (payload: `claim:<task_id>`) |
+| `saath_task_done` | UTILITY | Marathi (`mr`) | `नमस्कार! आनंदाची बातमी: तुमचे हे काम पूर्ण झाले आहे: {{1}}. पूर्ण करणारा: {{2}}. काळजी करू नका, सर्व वेळेवर झाले आहे!` | None (Informational loop closure) |
+
+> **Key Template Implementation Notes:**
+> 1. **No Line Breaks:** Meta rejects template parameter values with newline characters (`\r` or `\n`). The backend sanitizes all parameters before transmission via `_clean_template_param`.
+> 2. **Explicit Language Mapping:** Sibling alerts (`saath_new_task`, `saath_task_escalation`) use `en_US` matching approved English templates. Parent completion notices (`saath_task_done`) use `mr` (Marathi).
+> 3. **Quick-Reply Template Buttons:** Outside WhatsApp's 24-hour customer service window, sibling templates are sent with a quick-reply button payload (`claim:<task_id>`). Meta delivers these as `msg["type"] == "button"` containing `msg["button"]["payload"]`, which Saath parses and processes with identical household isolation and deduplication as regular interactive buttons.
+
+---
+
+## Authorship & Team
+
+- **Sole Developer & Contributor:** Prathamesh Taware
+- **GitHub:** [@PrathameshTawar](https://github.com/PrathameshTawar)
+- **Hackathon Registration:** Solo entrant matching commit history.
 
 ---
 
