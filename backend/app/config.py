@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     escalation_days_before: int = 3
 
     class Config:
-        env_file = ".env"
+        env_file = (".env", "../.env")
         extra = "ignore"
 
     def get_api_key(self) -> str:
