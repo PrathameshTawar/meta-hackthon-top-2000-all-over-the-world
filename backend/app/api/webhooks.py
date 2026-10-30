@@ -216,6 +216,37 @@ async def _send_whatsapp_message(
             return False
 
 
+async def notify(
+    member: Member,
+    text: str,
+    buttons: Optional[list] = None,
+    template_name: Optional[str] = None,
+    template_params: Optional[list] = None,
+    reply_markup: Optional[dict] = None,
+) -> bool:
+    """
+    Unified notification dispatch function from Step 6 of the Build Guide.
+    Sends alerts to a member across Telegram and/or WhatsApp.
+    Respects WhatsApp's 24-hour customer service window based on member.last_inbound_at.
+    If outside 24h, sends an approved Meta template (saath_new_task, saath_task_escalation, saath_task_done).
+    """
+    success = True
+    if member.telegram_id:
+        await _send_telegram_message(member.telegram_id, text, reply_markup=reply_markup)
+    if member.phone:
+        ok = await _send_whatsapp_message(
+            to_phone=member.phone,
+            text=text,
+            buttons=buttons,
+            template_name=template_name,
+            template_params=template_params,
+            last_inbound_at=member.last_inbound_at,
+        )
+        if not ok:
+            success = False
+    return success
+
+
 async def notify_parents_task_done(task: Task, completed_by_name: str = "कुटुंबातील सदस्य"):
     """
     Sends a warm Marathi completion message to all parents in the household.
@@ -238,16 +269,12 @@ async def notify_parents_task_done(task: Task, completed_by_name: str = "कु�
                 f"पूर्ण करणारा: *{completed_by_name}*\n\n"
                 f"काळजी करू नका, सर्व वेळेवर झाले आहे! 😊"
             )
-            if parent.telegram_id:
-                await _send_telegram_message(parent.telegram_id, msg)
-            if parent.phone:
-                await _send_whatsapp_message(
-                    to_phone=parent.phone,
-                    text=msg,
-                    template_name="saath_task_done",
-                    template_params=[task.title, completed_by_name],
-                    last_inbound_at=parent.last_inbound_at,
-                )
+            await notify(
+                member=parent,
+                text=msg,
+                template_name="saath_task_done",
+                template_params=[task.title, completed_by_name],
+            )
 
 
 async def _notify_siblings_new_task(household_id: int, task_id: int, sibling_notification: str, sender_chat_id: str | int = ""):
@@ -279,20 +306,14 @@ async def _notify_siblings_new_task(household_id: int, task_id: int, sibling_not
         ]
 
         for child in children:
-            if child.telegram_id and str(child.telegram_id) != str(sender_chat_id):
-                await _send_telegram_message(
-                    child.telegram_id,
-                    sibling_notification,
-                    reply_markup=tg_reply_markup,
-                )
-            if child.phone and str(child.phone) != str(sender_chat_id):
-                await _send_whatsapp_message(
-                    to_phone=child.phone,
+            if str(child.telegram_id) != str(sender_chat_id) and str(child.phone) != str(sender_chat_id):
+                await notify(
+                    member=child,
                     text=sibling_notification,
                     buttons=wa_buttons,
                     template_name="saath_new_task",
                     template_params=[sibling_notification[:60], "Claim on board"],
-                    last_inbound_at=child.last_inbound_at,
+                    reply_markup=tg_reply_markup,
                 )
 
 
@@ -737,8 +758,11 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
 # 2. WhatsApp Cloud API Webhook Endpoints
 # ===========================================================================
 
-def _is_status_query(text: str) -> bool:
-    """Disambiguates status queries from bills containing words like 'बाकी रक्कम'."""
+async def _is_status_query(text: str) -> bool:
+    """
+    Disambiguates status questions from bills containing words like 'बाकी रक्कम'.
+    Uses Meta's Muse Spark to classify the intent when available.
+    """
     text_clean = text.strip()
     low = text_clean.lower()
 
@@ -763,6 +787,26 @@ def _is_status_query(text: str) -> bool:
     # Single-word questions
     if low in ("बाकी?", "बाकी", "pending?"):
         return True
+
+    # Use Muse Spark to classify intent when LLM client configured
+    if settings.llm_api_key and settings.llm_base_url:
+        try:
+            from openai import AsyncOpenAI
+            client = AsyncOpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
+            prompt = (
+                f"Classify if this WhatsApp message is asking for a status/task list or reporting a bill.\n"
+                f"Message: \"{text}\"\n"
+                f"Output ONLY 'status_query' or 'bill_document'."
+            )
+            res = await client.chat.completions.create(
+                model=settings.muse_spark_model,
+                temperature=0.0,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            ans = (res.choices[0].message.content or "").strip().lower()
+            return "status_query" in ans
+        except Exception:
+            pass
 
     return False
 
@@ -964,7 +1008,7 @@ async def process_single_whatsapp_message(msg: dict):
     # 2. Handle Text Messages & Status Queries
     text_content = msg.get("text", {}).get("body", "").strip()
     if text_content:
-        if _is_status_query(text_content):
+        if await _is_status_query(text_content):
             async with AsyncSessionLocal() as db:
                 tasks_res = await db.execute(
                     select(Task).where(

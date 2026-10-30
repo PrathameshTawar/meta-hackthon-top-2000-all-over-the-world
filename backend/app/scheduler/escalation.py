@@ -12,7 +12,7 @@ from sqlalchemy import select
 from app.config import settings
 from app.db.models import Task, TaskStatus, Member, MemberRole, Event
 from app.db.session import AsyncSessionLocal
-from app.api.webhooks import _send_whatsapp_message
+from app.api.webhooks import notify
 
 logger = logging.getLogger(__name__)
 
@@ -82,17 +82,13 @@ async def run_escalation(simulated_days_ahead: int = 0) -> list[int]:
             )
 
             for child in children:
-                if child.telegram_id:
-                    await _send_telegram(child.telegram_id, message)
-                if child.phone:
-                    await _send_whatsapp_message(
-                        to_phone=child.phone,
-                        text=message,
-                        buttons=[{"id": f"claim:{task.id}", "title": "Claim Task"}],
-                        template_name="saath_task_escalation",
-                        template_params=[task.title, f"{days_left}d"],
-                        last_inbound_at=child.last_inbound_at,
-                    )
+                await notify(
+                    member=child,
+                    text=message,
+                    buttons=[{"id": f"claim:{task.id}", "title": "Claim Task"}],
+                    template_name="saath_task_escalation",
+                    template_params=[task.title, f"{days_left}d"],
+                )
 
             # Update status
             task.status = TaskStatus.escalated

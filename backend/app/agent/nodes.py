@@ -371,18 +371,15 @@ async def node_perceive(state: AgentState) -> dict:
                             )
                             if down.status_code == 200:
                                 file_bytes = down.content
-                elif file_url.startswith("whatsapp://") and settings.whatsapp_token:
-                    media_id = file_url.replace("whatsapp://", "")
-                    graph_api = f"https://graph.facebook.com/{settings.whatsapp_api_version}"
+                elif file_url.startswith("whatsapp://"):
+                    GRAPH = f"https://graph.facebook.com/{settings.whatsapp_api_version}"
                     headers = {"Authorization": f"Bearer {settings.whatsapp_token}"}
                     async with httpx.AsyncClient(timeout=30) as http_c:
-                        meta = await http_c.get(f"{graph_api}/{media_id}", headers=headers)
-                        if meta.status_code == 200:
-                            media_url = meta.json().get("url")
-                            if media_url:
-                                down = await http_c.get(media_url, headers=headers)
-                                if down.status_code == 200:
-                                    file_bytes = down.content
+                        meta = await http_c.get(f"{GRAPH}/{file_url.removeprefix('whatsapp://')}", headers=headers)
+                        meta.raise_for_status()
+                        media = await http_c.get(meta.json()["url"], headers=headers)  # short-lived URL, token needed
+                        media.raise_for_status()
+                        file_bytes = media.content
                 elif file_url.startswith("http://") or file_url.startswith("https://"):
                     async with httpx.AsyncClient(timeout=30) as http_c:
                         resp = await http_c.get(file_url)
