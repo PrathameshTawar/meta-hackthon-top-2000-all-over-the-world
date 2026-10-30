@@ -37,8 +37,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(webhooks.router, prefix="/webhook", tags=["webhook"])
-app.include_router(webhooks.router, prefix="/chat", tags=["whatsapp_webhook"])
+# Webhooks: distinct routes for Telegram (/webhook/telegram) and WhatsApp (/chat/webhook)
+app.include_router(webhooks.telegram_router)
+app.include_router(webhooks.whatsapp_router)
 app.include_router(artifacts.router, prefix="/artifacts", tags=["artifacts"])
 app.include_router(tasks.router, prefix="/tasks", tags=["tasks"])
 app.include_router(members.router, prefix="/members", tags=["members"])

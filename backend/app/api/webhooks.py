@@ -11,7 +11,7 @@ import os
 import tempfile
 import logging
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 import httpx
@@ -26,10 +26,15 @@ from app.agent.graph import get_compiled_graph
 from langgraph.types import Command
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
 
-# Keep track of last 1000 update IDs to prevent network retry duplication
+telegram_router = APIRouter(prefix="/webhook", tags=["telegram"])
+whatsapp_router = APIRouter(prefix="/chat", tags=["whatsapp"])
+router = telegram_router  # Fallback backward compatibility
+
+# Keep track of last 1000 Telegram update IDs to prevent network retry duplication
 _processed_updates = deque(maxlen=1000)
+# Keep track of last 2000 WhatsApp message IDs to prevent retry duplicates
+_processed_wa_messages = deque(maxlen=2000)
 
 
 async def _download_telegram_file(file_id: str) -> bytes:
@@ -82,18 +87,71 @@ async def _answer_callback_query(callback_query_id: str, text: str = "Received!"
             logger.warning(f"Failed to answer callback query: {exc}")
 
 
-async def _send_whatsapp_message(to_phone: str, text: str, buttons: Optional[list] = None):
-    """Send text or interactive buttons via Meta's WhatsApp Cloud API."""
+async def _send_whatsapp_message(
+    to_phone: str,
+    text: str,
+    buttons: Optional[list] = None,
+    template_name: Optional[str] = None,
+    template_params: Optional[list] = None,
+    last_inbound_at: Optional[datetime] = None,
+) -> bool:
+    """
+    Send text, interactive buttons, or approved template via Meta's WhatsApp Cloud API.
+    Enforces WhatsApp's 24-hour customer service window:
+    - If last_inbound_at > 24 hours, sends an approved template directly.
+    - Inspects HTTP status and logs any Meta Graph API errors (e.g. error 131047).
+    - Falls back to template retry on error 131047.
+    """
     if not settings.whatsapp_token or not settings.whatsapp_phone_number_id:
-        logger.info(f"[WHATSAPP SIMULATED to {to_phone}]: {text} | Buttons: {buttons}")
-        return
+        logger.info(f"[WHATSAPP SIMULATED to {to_phone}]: {text} | Buttons: {buttons} | Template: {template_name}")
+        return True
 
-    clean_phone = to_phone.replace("+", "").strip()
-    url = f"https://graph.facebook.com/v20.0/{settings.whatsapp_phone_number_id}/messages"
+    clean_phone = to_phone.replace("+", "").replace("-", "").strip()
+    api_ver = settings.whatsapp_api_version or "v20.0"
+    url = f"https://graph.facebook.com/{api_ver}/{settings.whatsapp_phone_number_id}/messages"
     headers = {
         "Authorization": f"Bearer {settings.whatsapp_token}",
         "Content-Type": "application/json",
     }
+
+    # Check 24-hour customer service window
+    now_utc = datetime.utcnow()
+    is_outside_24h = False
+    if last_inbound_at is not None:
+        last_inbound_naive = last_inbound_at.replace(tzinfo=None)
+        if (now_utc - last_inbound_naive) > timedelta(hours=24):
+            is_outside_24h = True
+
+    # If outside 24h window and template is provided, send template directly
+    if is_outside_24h and template_name:
+        params_components = [
+            {"type": "text", "text": str(p)} for p in (template_params or [text[:60]])
+        ]
+        template_payload = {
+            "messaging_product": "whatsapp",
+            "to": clean_phone,
+            "type": "template",
+            "template": {
+                "name": template_name,
+                "language": {"code": "mr"},
+                "components": [
+                    {
+                        "type": "body",
+                        "parameters": params_components,
+                    }
+                ],
+            },
+        }
+        async with httpx.AsyncClient(timeout=10) as client:
+            try:
+                resp = await client.post(url, json=template_payload, headers=headers)
+                if resp.status_code >= 400:
+                    logger.error(f"WhatsApp template '{template_name}' to {to_phone} failed: {resp.status_code} - {resp.text}")
+                    return False
+                return True
+            except Exception as exc:
+                logger.error(f"Failed to post WhatsApp template to {to_phone}: {exc}")
+                return False
 
     if buttons:
         payload = {
@@ -121,9 +179,41 @@ async def _send_whatsapp_message(to_phone: str, text: str, buttons: Optional[lis
 
     async with httpx.AsyncClient(timeout=10) as client:
         try:
-            await client.post(url, json=payload, headers=headers)
+            resp = await client.post(url, json=payload, headers=headers)
+            if resp.status_code != 200:
+                err_body = resp.text
+                logger.error(f"WhatsApp send to {to_phone} returned status {resp.status_code}: {err_body}")
+                # Fallback retry if 131047 (outside 24h window) and template is specified
+                if "131047" in err_body and template_name:
+                    logger.info(f"Retrying outside 24h window with template '{template_name}' for {to_phone}")
+                    params_components = [
+                        {"type": "text", "text": str(p)} for p in (template_params or [text[:60]])
+                    ]
+                    retry_payload = {
+                        "messaging_product": "whatsapp",
+                        "to": clean_phone,
+                        "type": "template",
+                        "template": {
+                            "name": template_name,
+                            "language": {"code": "mr"},
+                            "components": [
+                                {
+                                    "type": "body",
+                                    "parameters": params_components,
+                                }
+                            ],
+                        },
+                    }
+                    retry_resp = await client.post(url, json=retry_payload, headers=headers)
+                    if retry_resp.status_code != 200:
+                        logger.error(f"WhatsApp template fallback also failed: {retry_resp.text}")
+                        return False
+                    return True
+                return False
+            return True
         except Exception as exc:
-            logger.warning(f"Failed to send WhatsApp message to {to_phone}: {exc}")
+            logger.error(f"Failed to send WhatsApp message to {to_phone}: {exc}")
+            return False
 
 
 async def notify_parents_task_done(task: Task, completed_by_name: str = "कुटुंबातील सदस्य"):
@@ -151,7 +241,13 @@ async def notify_parents_task_done(task: Task, completed_by_name: str = "कु�
             if parent.telegram_id:
                 await _send_telegram_message(parent.telegram_id, msg)
             if parent.phone:
-                await _send_whatsapp_message(parent.phone, msg)
+                await _send_whatsapp_message(
+                    to_phone=parent.phone,
+                    text=msg,
+                    template_name="saath_task_done",
+                    template_params=[task.title, completed_by_name],
+                    last_inbound_at=parent.last_inbound_at,
+                )
 
 
 async def _notify_siblings_new_task(household_id: int, task_id: int, sibling_notification: str, sender_chat_id: str | int = ""):
@@ -191,9 +287,12 @@ async def _notify_siblings_new_task(household_id: int, task_id: int, sibling_not
                 )
             if child.phone and str(child.phone) != str(sender_chat_id):
                 await _send_whatsapp_message(
-                    child.phone,
-                    sibling_notification,
+                    to_phone=child.phone,
+                    text=sibling_notification,
                     buttons=wa_buttons,
+                    template_name="saath_new_task",
+                    template_params=[sibling_notification[:60], "Claim on board"],
+                    last_inbound_at=child.last_inbound_at,
                 )
 
 
@@ -284,7 +383,7 @@ async def _run_agent(artifact_id: int, household_id: int, artifact_type: str, fi
 # 1. Telegram Webhook Endpoint
 # ===========================================================================
 
-@router.post("/telegram")
+@telegram_router.post("/telegram")
 async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
     secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
     if settings.telegram_webhook_secret and secret != settings.telegram_webhook_secret:
@@ -638,8 +737,37 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
 # 2. WhatsApp Cloud API Webhook Endpoints
 # ===========================================================================
 
-@router.get("/webhook")
-@router.get("/whatsapp")
+def _is_status_query(text: str) -> bool:
+    """Disambiguates status queries from bills containing words like 'बाकी रक्कम'."""
+    text_clean = text.strip()
+    low = text_clean.lower()
+
+    # If it contains explicit amount or bill indicators without a question word, it's a bill
+    bill_indicators = ["₹", "rs.", "rs ", "inr", "रक्कम", "महावितरण", "msedcl", "due date", "तारीख"]
+    if any(ind in low for ind in bill_indicators) and not any(q in low for q in ["काय बाकी", "कोणती कामे", "pending?"]):
+        return False
+
+    explicit_questions = [
+        "काय बाकी आहे",
+        "काय बाकी",
+        "कोणती कामे बाकी",
+        "pending tasks",
+        "what is pending",
+        "what's pending",
+        "status",
+        "dashboard",
+    ]
+    if any(q in low for q in explicit_questions):
+        return True
+
+    # Single-word questions
+    if low in ("बाकी?", "बाकी", "pending?"):
+        return True
+
+    return False
+
+
+@whatsapp_router.get("/webhook")
 async def whatsapp_verify(request: Request):
     """WhatsApp Cloud API handshake verification."""
     params = request.query_params
@@ -648,42 +776,61 @@ async def whatsapp_verify(request: Request):
     challenge = params.get("hub.challenge")
     if mode == "subscribe" and token == settings.whatsapp_verify_token:
         return PlainTextResponse(content=challenge or "", status_code=200)
+    logger.warning("WhatsApp verify handshake rejected: invalid token or mode")
     raise HTTPException(status_code=403, detail="Invalid verify token")
 
 
-@router.post("/webhook")
-@router.post("/whatsapp")
+@whatsapp_router.post("/webhook")
 async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
-    """Processes inbound WhatsApp messages and interactive button responses."""
+    """
+    Inbound WhatsApp webhook endpoint.
+    Strictly verifies Meta's HMAC SHA256 signature on every delivery.
+    Immediately returns 200 OK after deduplicating message IDs, and offloads
+    processing to background tasks.
+    """
     raw_body = await request.body()
     sig = request.headers.get("X-Hub-Signature-256", "")
-    if settings.whatsapp_app_secret and sig:
-        expected_sig = "sha256=" + hmac.new(
-            settings.whatsapp_app_secret.encode(), raw_body, hashlib.sha256
-        ).hexdigest()
-        if not hmac.compare_digest(sig, expected_sig):
-            raise HTTPException(status_code=403, detail="Invalid signature")
+    if not settings.whatsapp_app_secret or not sig:
+        logger.warning("WhatsApp webhook rejected: secret unset or X-Hub-Signature-256 missing")
+        raise HTTPException(status_code=403, detail="Signature missing or secret unset")
+
+    expected_sig = "sha256=" + hmac.new(
+        settings.whatsapp_app_secret.encode("utf-8"), raw_body, hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(sig, expected_sig):
+        logger.warning("WhatsApp webhook rejected: signature mismatch")
+        raise HTTPException(status_code=403, detail="Invalid signature")
 
     try:
         body = json.loads(raw_body.decode("utf-8"))
     except Exception:
-        return {"ok": True}
+        return {"status": "ok"}
 
-    entry = body.get("entry", [])
-    if not entry:
-        return {"ok": True}
-    changes = entry[0].get("changes", [])
-    if not changes:
-        return {"ok": True}
-    value = changes[0].get("value", {})
-    messages = value.get("messages", [])
-    if not messages:
-        return {"ok": True}
+    # Loop over all entries, changes, and messages
+    for entry in body.get("entry", []):
+        for change in entry.get("changes", []):
+            value = change.get("value", {})
+            messages = value.get("messages", [])
+            for msg in messages:
+                msg_id = msg.get("id")
+                if msg_id:
+                    if msg_id in _processed_wa_messages:
+                        logger.info(f"Duplicate WhatsApp message ID skipped: {msg_id}")
+                        continue
+                    _processed_wa_messages.append(msg_id)
+                # Offload message processing to background task
+                background_tasks.add_task(process_single_whatsapp_message, msg)
 
-    msg = messages[0]
+    return {"status": "ok"}
+
+
+async def process_single_whatsapp_message(msg: dict):
+    """Handles an individual inbound WhatsApp message in a background task."""
     from_phone = msg.get("from", "")
+    if not from_phone:
+        return
 
-    # Look up member by phone or telegram_id
+    # Look up member by phone or telegram_id and record last_inbound_at
     async with AsyncSessionLocal() as db:
         res = await db.execute(
             select(Member).where(
@@ -698,9 +845,9 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
     if not member:
         await _send_whatsapp_message(
             from_phone,
-            "तुम्ही अजून नोंदणीकृत नाही. कृपया तुमच्या कुटुंबातील कोणाला सांगा की तुम्हाला जोडावे.",
+            "तुम्ही अजून नोंदणीकृत नाही. कृपया तुमच्या कुटुंबातील सदस्याला सांगा की तुम्हाला जोडावे.",
         )
-        return {"ok": True}
+        return
 
     household_id = member.household_id
 
@@ -733,7 +880,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                         f"When finished, tap Mark Done.",
                         buttons=[{"id": f"done:{task.id}", "title": "Mark Done"}],
                     )
-            return {"ok": True}
+            return
 
         # Done
         elif btn_id.startswith(("done:", "done_")):
@@ -745,7 +892,6 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                     task.updated_at = datetime.utcnow()
 
                     if task.recurrence == "monthly" and task.due_date:
-                        from datetime import timedelta
                         next_due = task.due_date + timedelta(days=30)
                         next_task = Task(
                             household_id=task.household_id,
@@ -774,20 +920,33 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                         f"✔️ '{task.title}' काम पूर्ण झाल्याचे नोंदवले आहे. पालकांना कळवले आहे. 🙏",
                     )
                     await notify_parents_task_done(task, completed_by_name=member.name)
-            return {"ok": True}
+            return
 
         # Confirmation: confirm_yes
         elif btn_id.startswith(("confirm_yes:", "confirm:yes:")):
             artifact_id = int(btn_id.split(":")[-1])
             graph = await get_compiled_graph()
             config = {"configurable": {"thread_id": str(artifact_id)}}
+            final_state = None
             async for step in graph.astream(Command(resume={"confirmed": True}), config=config):
-                pass
+                final_state = step
             await _send_whatsapp_message(
                 from_phone,
                 "✅ माहितीची पुष्टी झाली! काम कुटुंब बोर्डवर जोडले आहे. 🙏"
             )
-            return {"ok": True}
+            state = {}
+            if final_state:
+                for node_output in final_state.values():
+                    if isinstance(node_output, dict):
+                        state.update(node_output)
+            if state.get("sibling_notification") and state.get("task_id"):
+                await _notify_siblings_new_task(
+                    member.household_id,
+                    state["task_id"],
+                    state["sibling_notification"],
+                    sender_chat_id=from_phone,
+                )
+            return
 
         # Confirmation: confirm_no
         elif btn_id.startswith(("confirm_no:", "confirm:no:")):
@@ -800,13 +959,12 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 from_phone,
                 "❌ ठीक आहे, आम्ही हे काम रद्द केले आहे. कृपया पुन्हा पाठवा. 🙏"
             )
-            return {"ok": True}
+            return
 
     # 2. Handle Text Messages & Status Queries
     text_content = msg.get("text", {}).get("body", "").strip()
     if text_content:
-        low = text_content.lower()
-        if any(q in low for q in ["काय बाकी आहे", "काय बाकी", "pending", "status", "बाकी"]):
+        if _is_status_query(text_content):
             async with AsyncSessionLocal() as db:
                 tasks_res = await db.execute(
                     select(Task).where(
@@ -826,9 +984,9 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 reply = "\n".join(lines)
 
             await _send_whatsapp_message(from_phone, reply)
-            return {"ok": True}
+            return
 
-        # Store text artifact
+        # Store text artifact and process with agent
         async with AsyncSessionLocal() as db:
             artifact = Artifact(
                 household_id=household_id,
@@ -841,8 +999,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
             await db.refresh(artifact)
             artifact_id = artifact.id
 
-        background_tasks.add_task(
-            _run_agent,
+        await _run_agent(
             artifact_id=artifact_id,
             household_id=household_id,
             artifact_type="image",
@@ -850,7 +1007,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
             chat_id=from_phone,
             channel="whatsapp",
         )
-        return {"ok": True}
+        return
 
     # 3. Handle Voice / Image
     msg_type = msg.get("type", "")
@@ -862,7 +1019,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         artifact_type = ArtifactType.image
     else:
         await _send_whatsapp_message(from_phone, "🙏 संदेश मिळाला!")
-        return {"ok": True}
+        return
 
     async with AsyncSessionLocal() as db:
         artifact = Artifact(
@@ -875,8 +1032,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         await db.refresh(artifact)
         artifact_id = artifact.id
 
-    background_tasks.add_task(
-        _run_agent,
+    await _run_agent(
         artifact_id=artifact_id,
         household_id=household_id,
         artifact_type=artifact_type.value,
@@ -884,4 +1040,3 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         chat_id=from_phone,
         channel="whatsapp",
     )
-    return {"ok": True}
