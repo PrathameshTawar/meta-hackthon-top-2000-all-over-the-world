@@ -38,6 +38,7 @@ async def seed_data():
             name="Baba (दिलीप कुलकर्णी)",
             role=MemberRole.parent,
             telegram_id="baba_pune",
+            phone="+919800000001",
             categories_owned=[],
         )
         aai = Member(
@@ -45,6 +46,7 @@ async def seed_data():
             name="Aai (सुनीता कुलकर्णी)",
             role=MemberRole.parent,
             telegram_id="aai_pune",
+            phone="+919800000002",
             categories_owned=[],
         )
         # Children in different cities
@@ -53,6 +55,7 @@ async def seed_data():
             name="Rohan (बेंगळुरू)",  # Earner
             role=MemberRole.child,
             telegram_id="rohan_blr",
+            phone="+919800000003",
             categories_owned=["bill", "loan_emi", "insurance"],
         )
         priya = Member(
@@ -60,6 +63,7 @@ async def seed_data():
             name="Priya (मुंबई)",
             role=MemberRole.child,
             telegram_id="priya_mum",
+            phone="+919800000004",
             categories_owned=["appointment", "medical"],
         )
         amit = Member(
@@ -67,6 +71,7 @@ async def seed_data():
             name="Amit (दिल्ली)",
             role=MemberRole.child,
             telegram_id="amit_del",
+            phone="+919800000005",
             categories_owned=["pension", "govt_letter"],
         )
 

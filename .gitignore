@@ -24,3 +24,7 @@ pgdata/
 # OS
 .DS_Store
 Thumbs.db
+
+# Planning scratch files
+saath.md
+*.docx

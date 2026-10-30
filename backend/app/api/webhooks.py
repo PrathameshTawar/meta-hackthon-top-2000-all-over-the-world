@@ -1,9 +1,12 @@
 """
-Telegram webhook endpoint.
-Telegram sends every message and button tap here via POST /webhook/telegram.
+Telegram & WhatsApp Webhook endpoints.
+Supports:
+1. Telegram bot webhooks: POST /webhook/telegram
+2. WhatsApp Cloud API webhooks: GET & POST /chat/webhook or /webhook/whatsapp
 """
 import hashlib
 import hmac
+import json
 import os
 import tempfile
 import logging
@@ -13,6 +16,7 @@ from typing import Optional
 
 import httpx
 from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
+from starlette.responses import PlainTextResponse
 from sqlalchemy import select
 
 from app.config import settings
@@ -24,7 +28,7 @@ from langgraph.types import Command
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Keep track of last 1000 update IDs to prevent Telegram network retry duplication
+# Keep track of last 1000 update IDs to prevent network retry duplication
 _processed_updates = deque(maxlen=1000)
 
 
@@ -33,7 +37,6 @@ async def _download_telegram_file(file_id: str) -> bytes:
     if not settings.telegram_bot_token:
         return b""
     async with httpx.AsyncClient(timeout=30) as client:
-        # Step 1: get file path
         info = await client.get(
             f"https://api.telegram.org/bot{settings.telegram_bot_token}/getFile",
             params={"file_id": file_id},
@@ -41,7 +44,6 @@ async def _download_telegram_file(file_id: str) -> bytes:
         info.raise_for_status()
         file_path = info.json()["result"]["file_path"]
 
-        # Step 2: download
         download = await client.get(
             f"https://api.telegram.org/file/bot{settings.telegram_bot_token}/{file_path}"
         )
@@ -80,10 +82,54 @@ async def _answer_callback_query(callback_query_id: str, text: str = "Received!"
             logger.warning(f"Failed to answer callback query: {exc}")
 
 
+async def _send_whatsapp_message(to_phone: str, text: str, buttons: Optional[list] = None):
+    """Send text or interactive buttons via Meta's WhatsApp Cloud API."""
+    if not settings.whatsapp_token or not settings.whatsapp_phone_number_id:
+        logger.info(f"[WHATSAPP SIMULATED to {to_phone}]: {text} | Buttons: {buttons}")
+        return
+
+    clean_phone = to_phone.replace("+", "").strip()
+    url = f"https://graph.facebook.com/v20.0/{settings.whatsapp_phone_number_id}/messages"
+    headers = {
+        "Authorization": f"Bearer {settings.whatsapp_token}",
+        "Content-Type": "application/json",
+    }
+
+    if buttons:
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": clean_phone,
+            "type": "interactive",
+            "interactive": {
+                "type": "button",
+                "body": {"text": text},
+                "action": {
+                    "buttons": [
+                        {"type": "reply", "reply": {"id": b["id"], "title": b["title"]}}
+                        for b in buttons[:3]
+                    ]
+                },
+            },
+        }
+    else:
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": clean_phone,
+            "type": "text",
+            "text": {"body": text},
+        }
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        try:
+            await client.post(url, json=payload, headers=headers)
+        except Exception as exc:
+            logger.warning(f"Failed to send WhatsApp message to {to_phone}: {exc}")
+
+
 async def notify_parents_task_done(task: Task, completed_by_name: str = "कुटुंबातील सदस्य"):
     """
     Sends a warm Marathi completion message to all parents in the household.
-    Closes the loop so parents know their obligation is settled.
+    Closes the loop across both Telegram and WhatsApp so parents know their obligation is settled.
     """
     async with AsyncSessionLocal() as db:
         parents_res = await db.execute(
@@ -94,20 +140,22 @@ async def notify_parents_task_done(task: Task, completed_by_name: str = "कु�
         )
         parents = parents_res.scalars().all()
         for parent in parents:
+            amt_str = f" ({task.amount})" if task.amount else ""
+            msg = (
+                f"🙏 *नमस्कार! आनंदाची बातमी*\n\n"
+                f"तुमचे हे काम पूर्ण झाले आहे:\n"
+                f"📌 *{task.title}*{amt_str}\n"
+                f"पूर्ण करणारा: *{completed_by_name}*\n\n"
+                f"काळजी करू नका, सर्व वेळेवर झाले आहे! 😊"
+            )
             if parent.telegram_id:
-                amt_str = f" ({task.amount})" if task.amount else ""
-                msg = (
-                    f"🙏 *नमस्कार! आनंदाची बातमी*\n\n"
-                    f"तुमचे हे काम पूर्ण झाले आहे:\n"
-                    f"📌 *{task.title}*{amt_str}\n"
-                    f"पूर्ण करणारा: *{completed_by_name}*\n\n"
-                    f"काळजी करू नका, सर्व वेळेवर झाले आहे! 😊"
-                )
                 await _send_telegram_message(parent.telegram_id, msg)
+            if parent.phone:
+                await _send_whatsapp_message(parent.phone, msg)
 
 
 async def _notify_siblings_new_task(household_id: int, task_id: int, sibling_notification: str, sender_chat_id: str | int = ""):
-    """Alerts siblings with watch-friendly action buttons (Claim, Done, View Board)."""
+    """Alerts siblings on Telegram and WhatsApp with watch-friendly action buttons."""
     async with AsyncSessionLocal() as db:
         children_res = await db.execute(
             select(Member).where(
@@ -117,7 +165,7 @@ async def _notify_siblings_new_task(household_id: int, task_id: int, sibling_not
         )
         children = children_res.scalars().all()
 
-        reply_markup = {
+        tg_reply_markup = {
             "inline_keyboard": [
                 [
                     {"text": "✅ Claim / मी करतो", "callback_data": f"claim:{task_id}"},
@@ -129,17 +177,28 @@ async def _notify_siblings_new_task(household_id: int, task_id: int, sibling_not
             ]
         }
 
+        wa_buttons = [
+            {"id": f"claim:{task_id}", "title": "Claim Task"},
+            {"id": f"done:{task_id}", "title": "Mark Done"},
+        ]
+
         for child in children:
             if child.telegram_id and str(child.telegram_id) != str(sender_chat_id):
                 await _send_telegram_message(
                     child.telegram_id,
                     sibling_notification,
-                    reply_markup=reply_markup,
+                    reply_markup=tg_reply_markup,
+                )
+            if child.phone and str(child.phone) != str(sender_chat_id):
+                await _send_whatsapp_message(
+                    child.phone,
+                    sibling_notification,
+                    buttons=wa_buttons,
                 )
 
 
-async def _run_agent(artifact_id: int, household_id: int, artifact_type: str, file_url: str, chat_id: str):
-    """Run the LangGraph agent in the background with persistent checkpointing."""
+async def _run_agent(artifact_id: int, household_id: int, artifact_type: str, file_url: str, chat_id: str, channel: str = "telegram"):
+    """Run the LangGraph agent in the background with persistent SQLite checkpointing."""
     initial_state = {
         "artifact_id": artifact_id,
         "household_id": household_id,
@@ -163,19 +222,30 @@ async def _run_agent(artifact_id: int, household_id: int, artifact_type: str, fi
 
         # If interrupted: present confirmation question with interactive Correct and Wrong buttons
         if interrupted_question:
-            reply_markup = {
-                "inline_keyboard": [
-                    [
-                        {"text": "✅ Correct / होय", "callback_data": f"confirm_yes:{artifact_id}"},
-                        {"text": "❌ Wrong / नाही", "callback_data": f"confirm_no:{artifact_id}"},
+            if channel == "telegram":
+                reply_markup = {
+                    "inline_keyboard": [
+                        [
+                            {"text": "✅ Correct / होय", "callback_data": f"confirm_yes:{artifact_id}"},
+                            {"text": "❌ Wrong / नाही", "callback_data": f"confirm_no:{artifact_id}"},
+                        ]
                     ]
+                }
+                await _send_telegram_message(
+                    chat_id,
+                    f"❓ *कृपया माहिती तपासा*:\n{interrupted_question}",
+                    reply_markup=reply_markup,
+                )
+            else:
+                wa_buttons = [
+                    {"id": f"confirm_yes:{artifact_id}", "title": "Correct (होय)"},
+                    {"id": f"confirm_no:{artifact_id}", "title": "Wrong (नाही)"},
                 ]
-            }
-            await _send_telegram_message(
-                chat_id,
-                f"❓ *कृपया माहिती तपासा*:\n{interrupted_question}",
-                reply_markup=reply_markup,
-            )
+                await _send_whatsapp_message(
+                    chat_id,
+                    f"❓ कृपया माहिती तपासा:\n{interrupted_question}",
+                    buttons=wa_buttons,
+                )
             return
 
         if final_state:
@@ -186,7 +256,10 @@ async def _run_agent(artifact_id: int, household_id: int, artifact_type: str, fi
 
             # Send parent confirmation reply
             reply = state.get("parent_reply", "तुमचा संदेश मिळाला. आम्ही लवकरच कळवतो.")
-            await _send_telegram_message(chat_id, reply)
+            if channel == "telegram":
+                await _send_telegram_message(chat_id, reply)
+            else:
+                await _send_whatsapp_message(chat_id, reply)
 
             # Alert siblings with interactive buttons
             sibling_notif = state.get("sibling_notification")
@@ -201,12 +274,18 @@ async def _run_agent(artifact_id: int, household_id: int, artifact_type: str, fi
             "आम्हाला हा संदेश वाचताना अडचण आली. "
             "कृपया बिलाचा स्पष्ट फोटो किंवा व्हॉईस नोट पुन्हा पाठवा. 🙏"
         )
-        await _send_telegram_message(chat_id, friendly_msg)
+        if channel == "telegram":
+            await _send_telegram_message(chat_id, friendly_msg)
+        else:
+            await _send_whatsapp_message(chat_id, friendly_msg)
 
+
+# ===========================================================================
+# 1. Telegram Webhook Endpoint
+# ===========================================================================
 
 @router.post("/telegram")
 async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
-    # Validate secret token header if set
     secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
     if settings.telegram_webhook_secret and secret != settings.telegram_webhook_secret:
         raise HTTPException(status_code=403, detail="Invalid secret token")
@@ -228,9 +307,7 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
         from_user = str(callback_query["from"]["id"])
         chat_id = callback_query["message"]["chat"]["id"] if "message" in callback_query else from_user
 
-        # -------------------------------------------------------------------
-        # Confirmation Buttons: confirm_yes:{artifact_id} / confirm_no:{artifact_id}
-        # -------------------------------------------------------------------
+        # Confirmation: confirm_yes:{artifact_id}
         if cb_data.startswith(("confirm_yes:", "confirm:yes:")):
             try:
                 artifact_id = int(cb_data.split(":")[-1])
@@ -244,15 +321,9 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
                         return {"ok": False, "error": "Not found"}
 
                     if artifact.household_id != member.household_id:
-                        logger.warning(
-                            f"Household mismatch on confirmation: user {from_user} "
-                            f"(household {member.household_id}) artifact {artifact_id} "
-                            f"(household {artifact.household_id})"
-                        )
                         await _answer_callback_query(cb_id, "⚠️ हे तुमच्या कुटुंबाचे नाही.")
                         return {"ok": False, "error": "Household mismatch"}
 
-                # Resume agent graph with confirmation
                 graph = await get_compiled_graph()
                 config = {"configurable": {"thread_id": str(artifact_id)}}
                 final_state = None
@@ -284,6 +355,7 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
                 await _answer_callback_query(cb_id, "त्रुटी आली.")
                 return {"ok": False, "error": str(exc)}
 
+        # Confirmation: confirm_no:{artifact_id}
         elif cb_data.startswith(("confirm_no:", "confirm:no:")):
             try:
                 artifact_id = int(cb_data.split(":")[-1])
@@ -300,7 +372,6 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
                         await _answer_callback_query(cb_id, "⚠️ हे तुमच्या कुटुंबाचे नाही.")
                         return {"ok": False, "error": "Household mismatch"}
 
-                # Resume agent graph with cancellation
                 graph = await get_compiled_graph()
                 config = {"configurable": {"thread_id": str(artifact_id)}}
                 async for step in graph.astream(Command(resume={"confirmed": False}), config=config):
@@ -317,9 +388,7 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
                 await _answer_callback_query(cb_id, "त्रुटी आली.")
                 return {"ok": False, "error": str(exc)}
 
-        # -------------------------------------------------------------------
-        # Claim Button: claim:{task_id} or claim_{task_id}
-        # -------------------------------------------------------------------
+        # Claim Button: claim:{task_id}
         elif cb_data.startswith(("claim:", "claim_")):
             try:
                 task_id = int(cb_data.replace("claim:", "").replace("claim_", ""))
@@ -336,12 +405,7 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
                         await _answer_callback_query(cb_id, "काम सापडले नाही.")
                         return {"ok": False, "error": "Task not found"}
 
-                    # Enforce household isolation
                     if task.household_id != member.household_id:
-                        logger.warning(
-                            f"Security mismatch: member {member.name} (household {member.household_id}) "
-                            f"attempted to claim task #{task_id} (household {task.household_id})"
-                        )
                         await _answer_callback_query(cb_id, "⚠️ हे काम तुमच्या कुटुंबाचे नाही.")
                         return {"ok": False, "error": "Household mismatch"}
 
@@ -382,9 +446,7 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
                 await _answer_callback_query(cb_id, "Error claiming task")
                 return {"ok": False, "error": str(exc)}
 
-        # -------------------------------------------------------------------
-        # Done Button: done:{task_id} or done_{task_id}
-        # -------------------------------------------------------------------
+        # Done Button: done:{task_id}
         elif cb_data.startswith(("done:", "done_")):
             try:
                 task_id = int(cb_data.replace("done:", "").replace("done_", ""))
@@ -401,17 +463,29 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
                         await _answer_callback_query(cb_id, "काम सापडले नाही.")
                         return {"ok": False, "error": "Task not found"}
 
-                    # Enforce household isolation
                     if task.household_id != member.household_id:
-                        logger.warning(
-                            f"Security mismatch: member {member.name} (household {member.household_id}) "
-                            f"attempted to complete task #{task_id} (household {task.household_id})"
-                        )
                         await _answer_callback_query(cb_id, "⚠️ हे काम तुमच्या कुटुंबाचे नाही.")
                         return {"ok": False, "error": "Household mismatch"}
 
                     task.status = TaskStatus.done
                     task.updated_at = datetime.utcnow()
+
+                    # Handle monthly recurrence
+                    if task.recurrence == "monthly" and task.due_date:
+                        from datetime import timedelta
+                        next_due = task.due_date + timedelta(days=30)
+                        next_task = Task(
+                            household_id=task.household_id,
+                            category=task.category,
+                            title=task.title,
+                            amount=task.amount,
+                            due_date=next_due,
+                            payee=task.payee,
+                            status=TaskStatus.confirmed,
+                            assignee_id=task.assignee_id,
+                            recurrence="monthly",
+                        )
+                        db.add(next_task)
 
                     db.add(Event(
                         household_id=task.household_id,
@@ -430,7 +504,6 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
                         f"तुमच्या पालकांना लगेच कळवले आहे. 🙏",
                     )
 
-                    # Close the loop: notify all parents in the household
                     await notify_parents_task_done(task, completed_by_name=member.name)
                     return {"ok": True, "action": "done"}
             except Exception as exc:
@@ -446,12 +519,14 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
     chat_id = message["chat"]["id"]
     telegram_user_id = str(message["from"]["id"])
 
-    # Look up sender in members table
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(Member).where(Member.telegram_id == telegram_user_id)
         )
         member = result.scalars().first()
+        if member:
+            member.last_inbound_at = datetime.utcnow()
+            await db.commit()
 
     if member is None:
         await _send_telegram_message(
@@ -462,11 +537,10 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
 
     household_id = member.household_id
 
-    # Handle text messages (e.g., status inquiries or text forwards)
+    # Handle text messages (e.g. "काय बाकी आहे?" / status inquiries)
     text_content = message.get("text", "").strip()
     if text_content and not any(k in message for k in ["photo", "voice", "audio", "document"]):
         low = text_content.lower()
-        # Voice or typed status question: "काय बाकी आहे?" / "what is pending?"
         if any(q in low for q in ["काय बाकी आहे", "काय बाकी", "pending", "status", "बाकी"]):
             async with AsyncSessionLocal() as db:
                 tasks_res = await db.execute(
@@ -490,7 +564,7 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
             await _send_telegram_message(chat_id, reply)
             return {"ok": True}
 
-        # Otherwise treat text as forward / document note
+        # Otherwise store text artifact
         async with AsyncSessionLocal() as db:
             artifact = Artifact(
                 household_id=household_id,
@@ -510,6 +584,7 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
             artifact_type="image",
             file_url="text://message",
             chat_id=chat_id,
+            channel="telegram",
         )
         return {"ok": True}
 
@@ -523,7 +598,6 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
     elif "document" in message:
         doc = message["document"]
         mime = doc.get("mime_type", "")
-        # Only accept image files for OCR
         if not mime.startswith("image/"):
             await _send_telegram_message(
                 chat_id,
@@ -555,5 +629,259 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
         artifact_type=artifact_type.value,
         file_url=f"telegram://{file_id}",
         chat_id=chat_id,
+        channel="telegram",
+    )
+    return {"ok": True}
+
+
+# ===========================================================================
+# 2. WhatsApp Cloud API Webhook Endpoints
+# ===========================================================================
+
+@router.get("/webhook")
+@router.get("/whatsapp")
+async def whatsapp_verify(request: Request):
+    """WhatsApp Cloud API handshake verification."""
+    params = request.query_params
+    mode = params.get("hub.mode")
+    token = params.get("hub.verify_token")
+    challenge = params.get("hub.challenge")
+    if mode == "subscribe" and token == settings.whatsapp_verify_token:
+        return PlainTextResponse(content=challenge or "", status_code=200)
+    raise HTTPException(status_code=403, detail="Invalid verify token")
+
+
+@router.post("/webhook")
+@router.post("/whatsapp")
+async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
+    """Processes inbound WhatsApp messages and interactive button responses."""
+    raw_body = await request.body()
+    sig = request.headers.get("X-Hub-Signature-256", "")
+    if settings.whatsapp_app_secret and sig:
+        expected_sig = "sha256=" + hmac.new(
+            settings.whatsapp_app_secret.encode(), raw_body, hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(sig, expected_sig):
+            raise HTTPException(status_code=403, detail="Invalid signature")
+
+    try:
+        body = json.loads(raw_body.decode("utf-8"))
+    except Exception:
+        return {"ok": True}
+
+    entry = body.get("entry", [])
+    if not entry:
+        return {"ok": True}
+    changes = entry[0].get("changes", [])
+    if not changes:
+        return {"ok": True}
+    value = changes[0].get("value", {})
+    messages = value.get("messages", [])
+    if not messages:
+        return {"ok": True}
+
+    msg = messages[0]
+    from_phone = msg.get("from", "")
+
+    # Look up member by phone or telegram_id
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(
+            select(Member).where(
+                (Member.phone == from_phone) | (Member.phone == f"+{from_phone}") | (Member.telegram_id == from_phone)
+            )
+        )
+        member = res.scalars().first()
+        if member:
+            member.last_inbound_at = datetime.utcnow()
+            await db.commit()
+
+    if not member:
+        await _send_whatsapp_message(
+            from_phone,
+            "तुम्ही अजून नोंदणीकृत नाही. कृपया तुमच्या कुटुंबातील कोणाला सांगा की तुम्हाला जोडावे.",
+        )
+        return {"ok": True}
+
+    household_id = member.household_id
+
+    # 1. Handle Interactive Button Reply
+    if msg.get("type") == "interactive":
+        btn_reply = msg.get("interactive", {}).get("button_reply", {})
+        btn_id = btn_reply.get("id", "")
+
+        # Claim
+        if btn_id.startswith(("claim:", "claim_")):
+            task_id = int(btn_id.replace("claim:", "").replace("claim_", ""))
+            async with AsyncSessionLocal() as db:
+                task = await db.get(Task, task_id)
+                if task and task.household_id == household_id:
+                    task.status = TaskStatus.claimed
+                    task.assignee_id = member.id
+                    task.updated_at = datetime.utcnow()
+                    db.add(Event(
+                        household_id=task.household_id,
+                        task_id=task.id,
+                        actor=f"member:{member.name}",
+                        action="claimed",
+                        reason=f"Claimed via WhatsApp by {member.name}",
+                        payload={"member_id": member.id, "phone": from_phone},
+                    ))
+                    await db.commit()
+                    await _send_whatsapp_message(
+                        from_phone,
+                        f"✅ Task #{task.id} ('{task.title}') has been claimed by you on the family board.\n"
+                        f"When finished, tap Mark Done.",
+                        buttons=[{"id": f"done:{task.id}", "title": "Mark Done"}],
+                    )
+            return {"ok": True}
+
+        # Done
+        elif btn_id.startswith(("done:", "done_")):
+            task_id = int(btn_id.replace("done:", "").replace("done_", ""))
+            async with AsyncSessionLocal() as db:
+                task = await db.get(Task, task_id)
+                if task and task.household_id == household_id:
+                    task.status = TaskStatus.done
+                    task.updated_at = datetime.utcnow()
+
+                    if task.recurrence == "monthly" and task.due_date:
+                        from datetime import timedelta
+                        next_due = task.due_date + timedelta(days=30)
+                        next_task = Task(
+                            household_id=task.household_id,
+                            category=task.category,
+                            title=task.title,
+                            amount=task.amount,
+                            due_date=next_due,
+                            payee=task.payee,
+                            status=TaskStatus.confirmed,
+                            assignee_id=task.assignee_id,
+                            recurrence="monthly",
+                        )
+                        db.add(next_task)
+
+                    db.add(Event(
+                        household_id=task.household_id,
+                        task_id=task.id,
+                        actor=f"member:{member.name}",
+                        action="completed",
+                        reason=f"Marked completed via WhatsApp by {member.name}",
+                        payload={"member_id": member.id, "phone": from_phone},
+                    ))
+                    await db.commit()
+                    await _send_whatsapp_message(
+                        from_phone,
+                        f"✔️ '{task.title}' काम पूर्ण झाल्याचे नोंदवले आहे. पालकांना कळवले आहे. 🙏",
+                    )
+                    await notify_parents_task_done(task, completed_by_name=member.name)
+            return {"ok": True}
+
+        # Confirmation: confirm_yes
+        elif btn_id.startswith(("confirm_yes:", "confirm:yes:")):
+            artifact_id = int(btn_id.split(":")[-1])
+            graph = await get_compiled_graph()
+            config = {"configurable": {"thread_id": str(artifact_id)}}
+            async for step in graph.astream(Command(resume={"confirmed": True}), config=config):
+                pass
+            await _send_whatsapp_message(
+                from_phone,
+                "✅ माहितीची पुष्टी झाली! काम कुटुंब बोर्डवर जोडले आहे. 🙏"
+            )
+            return {"ok": True}
+
+        # Confirmation: confirm_no
+        elif btn_id.startswith(("confirm_no:", "confirm:no:")):
+            artifact_id = int(btn_id.split(":")[-1])
+            graph = await get_compiled_graph()
+            config = {"configurable": {"thread_id": str(artifact_id)}}
+            async for step in graph.astream(Command(resume={"confirmed": False}), config=config):
+                pass
+            await _send_whatsapp_message(
+                from_phone,
+                "❌ ठीक आहे, आम्ही हे काम रद्द केले आहे. कृपया पुन्हा पाठवा. 🙏"
+            )
+            return {"ok": True}
+
+    # 2. Handle Text Messages & Status Queries
+    text_content = msg.get("text", {}).get("body", "").strip()
+    if text_content:
+        low = text_content.lower()
+        if any(q in low for q in ["काय बाकी आहे", "काय बाकी", "pending", "status", "बाकी"]):
+            async with AsyncSessionLocal() as db:
+                tasks_res = await db.execute(
+                    select(Task).where(
+                        Task.household_id == household_id,
+                        Task.status.in_([TaskStatus.new, TaskStatus.confirmed, TaskStatus.claimed, TaskStatus.escalated, TaskStatus.needs_review]),
+                    ).order_by(Task.due_date.asc())
+                )
+                pending_tasks = tasks_res.scalars().all()
+
+            if not pending_tasks:
+                reply = "सध्या कोणतीही कामे बाकी नाहीत! सर्व कामे पूर्ण झाली आहेत. 🙏"
+            else:
+                lines = ["📋 सध्या बाकी असलेली कामे:"]
+                for i, t in enumerate(pending_tasks[:5], 1):
+                    amt = f" ({t.amount})" if t.amount else ""
+                    lines.append(f"{i}. {t.title}{amt}")
+                reply = "\n".join(lines)
+
+            await _send_whatsapp_message(from_phone, reply)
+            return {"ok": True}
+
+        # Store text artifact
+        async with AsyncSessionLocal() as db:
+            artifact = Artifact(
+                household_id=household_id,
+                type=ArtifactType.image,
+                file_url="text://message",
+                raw_text=text_content,
+            )
+            db.add(artifact)
+            await db.commit()
+            await db.refresh(artifact)
+            artifact_id = artifact.id
+
+        background_tasks.add_task(
+            _run_agent,
+            artifact_id=artifact_id,
+            household_id=household_id,
+            artifact_type="image",
+            file_url="text://message",
+            chat_id=from_phone,
+            channel="whatsapp",
+        )
+        return {"ok": True}
+
+    # 3. Handle Voice / Image
+    msg_type = msg.get("type", "")
+    if msg_type in ("audio", "voice"):
+        media_id = msg.get(msg_type, {}).get("id", "")
+        artifact_type = ArtifactType.voice
+    elif msg_type == "image":
+        media_id = msg.get("image", {}).get("id", "")
+        artifact_type = ArtifactType.image
+    else:
+        await _send_whatsapp_message(from_phone, "🙏 संदेश मिळाला!")
+        return {"ok": True}
+
+    async with AsyncSessionLocal() as db:
+        artifact = Artifact(
+            household_id=household_id,
+            type=artifact_type,
+            file_url=f"whatsapp://{media_id}",
+        )
+        db.add(artifact)
+        await db.commit()
+        await db.refresh(artifact)
+        artifact_id = artifact.id
+
+    background_tasks.add_task(
+        _run_agent,
+        artifact_id=artifact_id,
+        household_id=household_id,
+        artifact_type=artifact_type.value,
+        file_url=f"whatsapp://{media_id}",
+        chat_id=from_phone,
+        channel="whatsapp",
     )
     return {"ok": True}

@@ -38,6 +38,7 @@ app.add_middleware(
 )
 
 app.include_router(webhooks.router, prefix="/webhook", tags=["webhook"])
+app.include_router(webhooks.router, prefix="/chat", tags=["whatsapp_webhook"])
 app.include_router(artifacts.router, prefix="/artifacts", tags=["artifacts"])
 app.include_router(tasks.router, prefix="/tasks", tags=["tasks"])
 app.include_router(members.router, prefix="/members", tags=["members"])

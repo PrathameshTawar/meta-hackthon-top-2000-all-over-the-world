@@ -77,6 +77,8 @@ class Member(Base):
     name: Mapped[str] = mapped_column(String(120))
     role: Mapped[MemberRole] = mapped_column(SAEnum(MemberRole))
     telegram_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, unique=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, unique=True)
+    last_inbound_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # JSON list of TaskCategory strings this member "owns"
     categories_owned: Mapped[Optional[list]] = mapped_column(JSON, default=list)
 

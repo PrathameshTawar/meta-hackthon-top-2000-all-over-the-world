@@ -916,6 +916,7 @@ async def node_assign(state: AgentState) -> dict:
                 assignee_id=assignee_id,
                 confidence=state.get("confidence", 0.9),
                 dedupe_key=state.get("dedupe_key"),
+                recurrence="monthly" if category == TaskCategory.loan_emi else None,
             )
             db.add(task)
             await db.flush()

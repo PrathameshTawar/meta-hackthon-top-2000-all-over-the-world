@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_webhook_secret: str = ""
 
+    # WhatsApp Cloud API (Meta)
+    whatsapp_token: str = ""
+    whatsapp_phone_number_id: str = ""
+    whatsapp_verify_token: str = "saath_meta_hackathon_verify_2026"
+    whatsapp_app_secret: str = ""
+
     # App & Localization
     base_url: str = "http://localhost:8000"
     frontend_url: str = "http://localhost:3000"
