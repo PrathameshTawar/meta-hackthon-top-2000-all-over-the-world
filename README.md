@@ -8,7 +8,7 @@
 
 **Saath** ("साथ", *together*) turns an ageing parent's voice notes and document photos into a verified, shared task board for adult children managing family obligations from other cities.
 
-A parent sends a Marathi or Hindi voice note or bill photo to a Telegram bot. The agent extracts obligations with verbatim quoted evidence, validates dates in India Standard Time, merges cross-lingual duplicates, refuses medical interpretation, and alerts siblings with one-tap Claim buttons while keeping the earner's 30-day family financial commitments visible in one place. When a task is completed, Saath immediately closes the loop by sending a warm Marathi confirmation message back to the parent.
+A parent sends a Marathi or Hindi voice note or bill photo over WhatsApp (or Telegram). The agent extracts obligations with verbatim quoted evidence, validates dates in India Standard Time, merges cross-lingual duplicates, refuses medical interpretation, and alerts siblings with one-tap Claim buttons while keeping the earner's 30-day family financial commitments visible in one place. When a task is completed, Saath immediately closes the loop by sending a warm Marathi confirmation message back to the parent across WhatsApp and Telegram.
 
 ---
 
@@ -44,7 +44,7 @@ India's sole earners are running two households from one phone, while ageing par
 Evaluated against a synthetic 40-item benchmark (35 test cases) covering Marathi/Hindi utility bills, education loan notices, insurance renewals, voice notes, cross-lingual duplicate pairs (10 items / 5 pairs), and clinical lab reports. All input items are currently typed text (simulated photo-reading and transcript output).
 
 | Test Slice | Items | Metric Evaluated | Target | Keyword Baseline (No AI) | Saath Guardrail | Muse Spark Open Pipeline | Status |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Bill & letter photos** | 15 | Field accuracy: amount, due date, payee | 85%+ | 97.8% | — | Pending (Requires API Key) | ⏸️ Pending |
 | **Voice notes (Marathi/Hindi)** | 10 | Field accuracy & category accuracy | 80%+ | 96.7% | — | Pending (Requires API Key) | ⏸️ Pending |
 | **Cross-lingual duplicate pairs** | 10 (5 pairs) | Correctly merged into single task | 5 of 5 | 5 of 5 (100%) | — | Pending (Requires API Key) | ⏸️ Pending |
@@ -57,7 +57,7 @@ Evaluated against a synthetic 40-item benchmark (35 test cases) covering Marathi
 ## Agent Graph & Human Confirmation Design
 
 ```text
-Parent Voice / Photo (Telegram)
+Parent Voice / Photo (WhatsApp / Telegram)
         │
         ▼
    [ Ingest ]
@@ -80,12 +80,12 @@ Parent Voice / Photo (Telegram)
                          ├──► FAILED / Low Confidence
                          │       │
                          │       ▼
-                         │   [ Interrupt ] ──► Pauses graph; sends Telegram buttons:
-                         │       │             [✅ Correct / होय]  [❌ Wrong / नाही]
+                         │   [ Interrupt ] ──► Pauses graph; sends WhatsApp / Telegram buttons:
+                         │       │             [Correct (होय)]  [Wrong (नाही)]
                          │       │
-                         │       ├─► [❌ Wrong]   ──► Command(resume={'confirmed': False}) ──► END
+                         │       ├─► [Wrong]   ──► Command(resume={'confirmed': False}) ──► END
                          │       │
-                         │       └─► [✅ Correct] ──► Command(resume={'confirmed': True})
+                         │       └─► [Correct] ──► Command(resume={'confirmed': True})
                          │                                    │
                          └──► PASSED ─────────────────────────┘
                                  │
@@ -103,7 +103,7 @@ Parent Voice / Photo (Telegram)
 ```
 
 ### Closing the Loop to Parents
-When a task is claimed and finished by a child via the Telegram inline button (`[✔️ Mark Done / काम पूर्ण झाले]`) or the web board, Saath sends a warm Marathi notification directly to the parent:
+When a task is claimed and finished by a child via WhatsApp quick-reply buttons (`[Mark Done]`) or Telegram inline buttons (`[✔️ Mark Done / काम पूर्ण झाले]`) or the web board, Saath sends a warm Marathi notification directly to the parent across WhatsApp and Telegram:
 > *"🙏 नमस्कार! आनंदाची बातमी: तुमचे हे काम पूर्ण झाले आहे: महावितरण वीज बिल (₹1,840). काळजी करू नका, सर्व वेळेवर झाले आहे! 😊"*
 
 ### Verbatim Quoted-Text Evidence
@@ -116,11 +116,11 @@ Every field extracted by the agent must be accompanied by the **exact verbatim s
 
 ## Core Flows & Features
 
-1. **Voice & Photo Ingest:** Parents send bills or voice notes in Marathi/Hindi via Telegram without downloading new apps or learning English interfaces.
-2. **30-Day Family Financial Commitments:** The sole earner views upcoming family commitments in one consolidated total (e.g., parents' electricity + insurance + earner's SBI education loan EMI = **₹49,640**).
-3. **Telegram Inline Claim & Done Buttons:** Smartwatch-ready alerts allow siblings to claim tasks with a single tap (`[✅ Claim / मी करतो]`) or mark them done (`[✔️ Mark Done / पूर्ण झाले]`), verifying household isolation.
-4. **Closing the Loop to Parents:** When a task is marked done, elderly parents receive an instant reassurance message in Marathi.
-5. **Persistent Interrupt & Human-in-the-Loop:** Blurry or low-confidence documents trigger interactive Telegram confirmation buttons (`[✅ Correct / होय]`, `[❌ Wrong / नाही]`), resuming execution through LangGraph `Command(resume=...)`.
+1. **Dual-Channel Voice & Photo Ingest:** Parents send bills or voice notes in Marathi/Hindi via WhatsApp or Telegram without downloading new apps or learning English interfaces.
+2. **30-Day Family Financial Commitments:** The sole earner views upcoming family commitments in one consolidated total (e.g., parents' electricity + insurance + earner's education loan EMI = **₹49,640**).
+3. **WhatsApp & Telegram Interactive Claim & Done Buttons:** Smartwatch-ready alerts allow siblings to claim tasks with a single tap (`[Claim Task]` / `[✅ Claim / मी करतो]`) or mark them done (`[Mark Done]` / `[✔️ Mark Done / पूर्ण झाले]`), with strict household authorization.
+4. **Closing the Loop to Parents:** When a task is marked done, elderly parents receive an instant reassurance message in Marathi on both WhatsApp and Telegram.
+5. **Persistent Interrupt & Human-in-the-Loop:** Blurry or low-confidence documents trigger interactive WhatsApp and Telegram confirmation buttons (`[Correct (होय)]`, `[Wrong (नाही)]`), resuming execution through LangGraph `Command(resume=...)`.
 6. **Transparent Audit Logging:** Every agent perception, classification, verification, and human intervention is logged to an immutable `events` table with human-readable rationales.
 7. **Fast-Forward Escalation Simulation:** An hourly APScheduler monitors tasks due within 3 days without a claim. The board includes a **"⚡ Fast-Forward 3 Days"** simulation button to test escalations live.
 

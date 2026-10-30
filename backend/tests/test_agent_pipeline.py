@@ -230,26 +230,38 @@ async def test_langgraph_persistent_interrupt_and_resume():
 async def test_claim_and_done_household_isolation():
     """
     Test that a member cannot claim or complete a task belonging to a different household.
+    Ensures both households exist independently so this test passes on any runner.
     """
+    import uuid
     from app.db.models import Household, Member, MemberRole, Task, TaskCategory, TaskStatus
 
     async with AsyncSessionLocal() as db:
-        # Create secondary household
-        h2 = Household(name="Household Two")
+        # 1. Ensure Household 1 exists
+        h1 = await db.get(Household, 1)
+        if not h1:
+            h1 = Household(id=1, name="Kulkarni Family (पुणे)", primary_language="mr")
+            db.add(h1)
+            await db.flush()
+
+        # 2. Create Household 2
+        h2 = Household(name="Household Two (Sharma)", primary_language="hi")
         db.add(h2)
         await db.flush()
 
+        # Member belonging exclusively to Household 2
+        unique_tg = f"stranger_{uuid.uuid4().hex[:8]}"
         member_h2 = Member(
             household_id=h2.id,
             name="Stranger Child",
             role=MemberRole.child,
-            telegram_id="999888777",
+            telegram_id=unique_tg,
+            phone="+919999999999",
         )
         db.add(member_h2)
 
-        # Create task in household 1
+        # 3. Create Task belonging exclusively to Household 1
         t1 = Task(
-            household_id=1,
+            household_id=h1.id,
             category=TaskCategory.bill,
             title="Household 1 MSEDCL Bill",
             amount="₹1,500",
@@ -258,16 +270,20 @@ async def test_claim_and_done_household_isolation():
         db.add(t1)
         await db.commit()
         await db.refresh(t1)
+        await db.refresh(member_h2)
 
         task_id = t1.id
 
         # Verify cross-household check logic
-        res = await db.execute(select(Member).where(Member.telegram_id == "999888777"))
+        res = await db.execute(select(Member).where(Member.telegram_id == unique_tg))
         member = res.scalars().first()
         task = await db.get(Task, task_id)
 
+        assert member is not None
+        assert task is not None
         assert member.household_id != task.household_id, "Households must differ for security test"
-        # Simulated handler check:
+
+        # Simulated handler check (same logic as webhooks & tasks API)
         is_authorized = (task.household_id == member.household_id)
         assert is_authorized is False, "Cross-household claim/done must be rejected"
 
@@ -277,9 +293,33 @@ async def test_parent_notification_on_task_done():
     """
     Test notify_parents_task_done finds parent members and drafts Marathi reassurance message.
     """
+    import uuid
+    from app.db.models import Household, Member, MemberRole, Task, TaskCategory, TaskStatus
     from app.api.webhooks import notify_parents_task_done
 
     async with AsyncSessionLocal() as db:
+        h1 = await db.get(Household, 1)
+        if not h1:
+            h1 = Household(id=1, name="Kulkarni Family (पुणे)", primary_language="mr")
+            db.add(h1)
+            await db.flush()
+
+        # Ensure parent exists in household 1
+        parent_res = await db.execute(
+            select(Member).where(Member.household_id == 1, Member.role == MemberRole.parent)
+        )
+        parent = parent_res.scalars().first()
+        if not parent:
+            parent = Member(
+                household_id=1,
+                name="Aai (सुनीता कुलकर्णी)",
+                role=MemberRole.parent,
+                telegram_id=f"parent_{uuid.uuid4().hex[:6]}",
+                phone="+919800000002",
+            )
+            db.add(parent)
+            await db.flush()
+
         t = Task(
             household_id=1,
             category=TaskCategory.bill,
