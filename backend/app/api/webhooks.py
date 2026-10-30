@@ -8,6 +8,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import tempfile
 import logging
 from collections import deque
@@ -20,7 +21,16 @@ from starlette.responses import PlainTextResponse
 from sqlalchemy import select
 
 from app.config import settings
-from app.db.models import Artifact, ArtifactType, Member, MemberRole, Task, TaskStatus, Event
+from app.db.models import (
+    Artifact,
+    ArtifactType,
+    Member,
+    MemberRole,
+    Task,
+    TaskStatus,
+    Event,
+    ProcessedMessage,
+)
 from app.db.session import AsyncSessionLocal
 from app.agent.graph import get_compiled_graph
 from langgraph.types import Command
@@ -31,9 +41,25 @@ telegram_router = APIRouter(prefix="/webhook", tags=["telegram"])
 whatsapp_router = APIRouter(prefix="/chat", tags=["whatsapp"])
 router = telegram_router  # Fallback backward compatibility
 
+# Template language mapping:
+# - saath_new_task and saath_task_escalation are sent to siblings (English en_US)
+# - saath_task_done is sent to parents (Marathi mr)
+TEMPLATE_LANGUAGES = {
+    "saath_new_task": "en_US",
+    "saath_task_escalation": "en_US",
+    "saath_task_done": "mr",
+}
+
+
+def _clean_template_param(val: any) -> str:
+    """WhatsApp Cloud API rejects template parameter values containing line breaks."""
+    s = str(val) if val is not None else ""
+    return re.sub(r"[\r\n]+", " ", s).strip()
+
+
 # Keep track of last 1000 Telegram update IDs to prevent network retry duplication
 _processed_updates = deque(maxlen=1000)
-# Keep track of last 2000 WhatsApp message IDs to prevent retry duplicates
+# Fast in-memory L1 cache for WhatsApp message IDs (backed by ProcessedMessage table)
 _processed_wa_messages = deque(maxlen=2000)
 
 
@@ -93,6 +119,8 @@ async def _send_whatsapp_message(
     buttons: Optional[list] = None,
     template_name: Optional[str] = None,
     template_params: Optional[list] = None,
+    template_button_payload: Optional[str] = None,
+    template_language: Optional[str] = None,
     last_inbound_at: Optional[datetime] = None,
 ) -> bool:
     """
@@ -101,13 +129,16 @@ async def _send_whatsapp_message(
     - If last_inbound_at > 24 hours, sends an approved template directly.
     - Inspects HTTP status and logs any Meta Graph API errors (e.g. error 131047).
     - Falls back to template retry on error 131047.
+    - Strips line breaks from all template parameters (WhatsApp Cloud API rejects parameters containing \r or \n).
+    - Maps template names to approved language codes (e.g. en_US for sibling templates, mr for parent templates).
+    - Attaches quick-reply button payload (e.g. claim:<task_id>) when provided.
     """
     if not settings.whatsapp_token or not settings.whatsapp_phone_number_id:
         logger.info(f"[WHATSAPP SIMULATED to {to_phone}]: {text} | Buttons: {buttons} | Template: {template_name}")
         return True
 
     clean_phone = to_phone.replace("+", "").replace("-", "").strip()
-    api_ver = settings.whatsapp_api_version or "v20.0"
+    api_ver = settings.whatsapp_api_version or "v22.0"
     url = f"https://graph.facebook.com/{api_ver}/{settings.whatsapp_phone_number_id}/messages"
     headers = {
         "Authorization": f"Bearer {settings.whatsapp_token}",
@@ -122,26 +153,36 @@ async def _send_whatsapp_message(
         if (now_utc - last_inbound_naive) > timedelta(hours=24):
             is_outside_24h = True
 
-    # If outside 24h window and template is provided, send template directly
-    if is_outside_24h and template_name:
-        params_components = [
-            {"type": "text", "text": str(p)} for p in (template_params or [text[:60]])
+    def _build_template_payload(t_name: str, t_params: Optional[list], t_btn_payload: Optional[str], t_lang: Optional[str]) -> dict:
+        lang_code = t_lang or TEMPLATE_LANGUAGES.get(t_name, "mr")
+        cleaned_params = [_clean_template_param(p) for p in (t_params or [text[:60]])]
+        components = [
+            {
+                "type": "body",
+                "parameters": [{"type": "text", "text": p} for p in cleaned_params],
+            }
         ]
-        template_payload = {
+        if t_btn_payload:
+            components.append({
+                "type": "button",
+                "sub_type": "quick_reply",
+                "index": "0",
+                "parameters": [{"type": "payload", "payload": t_btn_payload}],
+            })
+        return {
             "messaging_product": "whatsapp",
             "to": clean_phone,
             "type": "template",
             "template": {
-                "name": template_name,
-                "language": {"code": "mr"},
-                "components": [
-                    {
-                        "type": "body",
-                        "parameters": params_components,
-                    }
-                ],
+                "name": t_name,
+                "language": {"code": lang_code},
+                "components": components,
             },
         }
+
+    # If outside 24h window and template is provided, send template directly
+    if is_outside_24h and template_name:
+        template_payload = _build_template_payload(template_name, template_params, template_button_payload, template_language)
         async with httpx.AsyncClient(timeout=10) as client:
             try:
                 resp = await client.post(url, json=template_payload, headers=headers)
@@ -186,24 +227,7 @@ async def _send_whatsapp_message(
                 # Fallback retry if 131047 (outside 24h window) and template is specified
                 if "131047" in err_body and template_name:
                     logger.info(f"Retrying outside 24h window with template '{template_name}' for {to_phone}")
-                    params_components = [
-                        {"type": "text", "text": str(p)} for p in (template_params or [text[:60]])
-                    ]
-                    retry_payload = {
-                        "messaging_product": "whatsapp",
-                        "to": clean_phone,
-                        "type": "template",
-                        "template": {
-                            "name": template_name,
-                            "language": {"code": "mr"},
-                            "components": [
-                                {
-                                    "type": "body",
-                                    "parameters": params_components,
-                                }
-                            ],
-                        },
-                    }
+                    retry_payload = _build_template_payload(template_name, template_params, template_button_payload, template_language)
                     retry_resp = await client.post(url, json=retry_payload, headers=headers)
                     if retry_resp.status_code != 200:
                         logger.error(f"WhatsApp template fallback also failed: {retry_resp.text}")
@@ -222,6 +246,8 @@ async def notify(
     buttons: Optional[list] = None,
     template_name: Optional[str] = None,
     template_params: Optional[list] = None,
+    template_button_payload: Optional[str] = None,
+    template_language: Optional[str] = None,
     reply_markup: Optional[dict] = None,
 ) -> bool:
     """
@@ -240,6 +266,8 @@ async def notify(
             buttons=buttons,
             template_name=template_name,
             template_params=template_params,
+            template_button_payload=template_button_payload,
+            template_language=template_language,
             last_inbound_at=member.last_inbound_at,
         )
         if not ok:
@@ -273,7 +301,8 @@ async def notify_parents_task_done(task: Task, completed_by_name: str = "कु�
                 member=parent,
                 text=msg,
                 template_name="saath_task_done",
-                template_params=[task.title, completed_by_name],
+                template_params=[_clean_template_param(task.title), _clean_template_param(completed_by_name)],
+                template_language="mr",
             )
 
 
@@ -312,7 +341,9 @@ async def _notify_siblings_new_task(household_id: int, task_id: int, sibling_not
                     text=sibling_notification,
                     buttons=wa_buttons,
                     template_name="saath_new_task",
-                    template_params=[sibling_notification[:60], "Claim on board"],
+                    template_params=[_clean_template_param(sibling_notification[:60]), "Claim on board"],
+                    template_button_payload=f"claim:{task_id}",
+                    template_language="en_US",
                     reply_markup=tg_reply_markup,
                 )
 
@@ -340,32 +371,91 @@ async def _run_agent(artifact_id: int, household_id: int, artifact_type: str, fi
                     interrupted_question = str(interrupts[0].value)
             final_state = step
 
-        # If interrupted: present confirmation question with interactive Correct and Wrong buttons
+        # If interrupted: route confirmation question to the category-owner sibling, not the elderly parent
         if interrupted_question:
-            if channel == "telegram":
-                reply_markup = {
-                    "inline_keyboard": [
-                        [
-                            {"text": "✅ Correct / होय", "callback_data": f"confirm_yes:{artifact_id}"},
-                            {"text": "❌ Wrong / नाही", "callback_data": f"confirm_no:{artifact_id}"},
-                        ]
-                    ]
-                }
-                await _send_telegram_message(
-                    chat_id,
-                    f"❓ *कृपया माहिती तपासा*:\n{interrupted_question}",
-                    reply_markup=reply_markup,
+            async with AsyncSessionLocal() as db:
+                children_res = await db.execute(
+                    select(Member).where(
+                        Member.household_id == household_id,
+                        Member.role == MemberRole.child,
+                    )
+                )
+                children = children_res.scalars().all()
+
+                # Identify sender member
+                sender_member = None
+                if channel == "telegram":
+                    s_res = await db.execute(select(Member).where(Member.telegram_id == str(chat_id)))
+                    sender_member = s_res.scalars().first()
+                else:
+                    s_res = await db.execute(
+                        select(Member).where(
+                            (Member.phone == chat_id) | (Member.phone == f"+{chat_id}")
+                        )
+                    )
+                    sender_member = s_res.scalars().first()
+
+            # Determine category from state if present
+            extracted_cat = None
+            if final_state:
+                for node_out in final_state.values():
+                    if isinstance(node_out, dict) and "category" in node_out:
+                        extracted_cat = node_out["category"]
+
+            # Select sibling: match categories_owned, otherwise first child
+            target_sibling = None
+            if children:
+                for c in children:
+                    if extracted_cat and c.categories_owned and extracted_cat in c.categories_owned:
+                        target_sibling = c
+                        break
+                if not target_sibling:
+                    target_sibling = children[0]
+
+            # If sender was an elderly parent, send a warm reassuring message so they aren't confused
+            if sender_member and sender_member.role == MemberRole.parent:
+                parent_reassurance = (
+                    "🙏 तुमचे बिल/माहिती मिळाली आहे. कुटुंबातील मुले याची खात्री करून काम पूर्ण करत आहेत, "
+                    "काळजी करू नका! 😊"
+                )
+                if channel == "telegram":
+                    await _send_telegram_message(chat_id, parent_reassurance)
+                else:
+                    await _send_whatsapp_message(chat_id, parent_reassurance)
+
+            # Route confirmation buttons to target sibling
+            confirm_text = (
+                f"❓ *Please verify extracted details for family board*:\n{interrupted_question}"
+            )
+            tg_reply_markup = {
+                "inline_keyboard": [
+                    [
+                        {"text": "✅ Correct / बरोबर", "callback_data": f"confirm_yes:{artifact_id}"},
+                        {"text": "❌ Wrong / चूक", "callback_data": f"confirm_no:{artifact_id}"},
+                    ],
+                    [
+                        {"text": "📋 View Board", "url": settings.frontend_url},
+                    ],
+                ]
+            }
+            wa_buttons = [
+                {"id": f"confirm_yes:{artifact_id}", "title": "Correct (बरोबर)"},
+                {"id": f"confirm_no:{artifact_id}", "title": "Wrong (चूक)"},
+            ]
+
+            if target_sibling:
+                await notify(
+                    member=target_sibling,
+                    text=confirm_text,
+                    buttons=wa_buttons,
+                    reply_markup=tg_reply_markup,
                 )
             else:
-                wa_buttons = [
-                    {"id": f"confirm_yes:{artifact_id}", "title": "Correct (होय)"},
-                    {"id": f"confirm_no:{artifact_id}", "title": "Wrong (नाही)"},
-                ]
-                await _send_whatsapp_message(
-                    chat_id,
-                    f"❓ कृपया माहिती तपासा:\n{interrupted_question}",
-                    buttons=wa_buttons,
-                )
+                # Fallback to sender if no sibling registered in household
+                if channel == "telegram":
+                    await _send_telegram_message(chat_id, confirm_text, reply_markup=tg_reply_markup)
+                else:
+                    await _send_whatsapp_message(chat_id, confirm_text, buttons=wa_buttons)
             return
 
         if final_state:
@@ -660,8 +750,7 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
     # Handle text messages (e.g. "काय बाकी आहे?" / status inquiries)
     text_content = message.get("text", "").strip()
     if text_content and not any(k in message for k in ["photo", "voice", "audio", "document"]):
-        low = text_content.lower()
-        if any(q in low for q in ["काय बाकी आहे", "काय बाकी", "pending", "status", "बाकी"]):
+        if await _is_status_query(text_content):
             async with AsyncSessionLocal() as db:
                 tasks_res = await db.execute(
                     select(Task).where(
@@ -858,10 +947,27 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
             for msg in messages:
                 msg_id = msg.get("id")
                 if msg_id:
+                    # In-memory fast-check
                     if msg_id in _processed_wa_messages:
-                        logger.info(f"Duplicate WhatsApp message ID skipped: {msg_id}")
+                        logger.info(f"Duplicate WhatsApp message ID skipped (memory): {msg_id}")
                         continue
                     _processed_wa_messages.append(msg_id)
+
+                    # Persistent DB check with unique constraint
+                    try:
+                        async with AsyncSessionLocal() as db:
+                            existing = await db.execute(
+                                select(ProcessedMessage).where(ProcessedMessage.message_id == msg_id)
+                            )
+                            if existing.scalar_one_or_none():
+                                logger.info(f"Duplicate WhatsApp message ID skipped (DB): {msg_id}")
+                                continue
+                            db.add(ProcessedMessage(message_id=msg_id, channel="whatsapp"))
+                            await db.commit()
+                    except Exception as db_exc:
+                        logger.warning(f"ProcessedMessage DB check/insert error: {db_exc}")
+                        continue
+
                 # Offload message processing to background task
                 background_tasks.add_task(process_single_whatsapp_message, msg)
 
@@ -895,11 +1001,16 @@ async def process_single_whatsapp_message(msg: dict):
 
     household_id = member.household_id
 
-    # 1. Handle Interactive Button Reply
+    # 1. Handle Interactive Button Reply or Template Button Tap
+    btn_id = None
     if msg.get("type") == "interactive":
         btn_reply = msg.get("interactive", {}).get("button_reply", {})
         btn_id = btn_reply.get("id", "")
+    elif msg.get("type") == "button":
+        # Meta WhatsApp template quick-reply button tap
+        btn_id = msg.get("button", {}).get("payload", "") or msg.get("button", {}).get("text", "")
 
+    if btn_id:
         # Claim
         if btn_id.startswith(("claim:", "claim_")):
             task_id = int(btn_id.replace("claim:", "").replace("claim_", ""))
@@ -969,6 +1080,12 @@ async def process_single_whatsapp_message(msg: dict):
         # Confirmation: confirm_yes
         elif btn_id.startswith(("confirm_yes:", "confirm:yes:")):
             artifact_id = int(btn_id.split(":")[-1])
+            async with AsyncSessionLocal() as db:
+                artifact = await db.get(Artifact, artifact_id)
+                if not artifact or artifact.household_id != household_id:
+                    await _send_whatsapp_message(from_phone, "⚠️ हे काम तुमच्या कुटुंबाचे नाही.")
+                    return
+
             graph = await get_compiled_graph()
             config = {"configurable": {"thread_id": str(artifact_id)}}
             final_state = None
@@ -995,6 +1112,12 @@ async def process_single_whatsapp_message(msg: dict):
         # Confirmation: confirm_no
         elif btn_id.startswith(("confirm_no:", "confirm:no:")):
             artifact_id = int(btn_id.split(":")[-1])
+            async with AsyncSessionLocal() as db:
+                artifact = await db.get(Artifact, artifact_id)
+                if not artifact or artifact.household_id != household_id:
+                    await _send_whatsapp_message(from_phone, "⚠️ हे काम तुमच्या कुटुंबाचे नाही.")
+                    return
+
             graph = await get_compiled_graph()
             config = {"configurable": {"thread_id": str(artifact_id)}}
             async for step in graph.astream(Command(resume={"confirmed": False}), config=config):
