@@ -159,3 +159,13 @@ class Event(Base):
 
     task: Mapped[Optional["Task"]] = relationship(back_populates="events")
 
+
+class ProcessedMessage(Base):
+    """Tracks processed message IDs across restarts to prevent duplicate processing."""
+    __tablename__ = "processed_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    message_id: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    channel: Mapped[str] = mapped_column(String(32), default="whatsapp")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
