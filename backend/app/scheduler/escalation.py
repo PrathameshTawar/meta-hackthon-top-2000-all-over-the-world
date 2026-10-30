@@ -88,6 +88,8 @@ async def run_escalation(simulated_days_ahead: int = 0) -> list[int]:
                     buttons=[{"id": f"claim:{task.id}", "title": "Claim Task"}],
                     template_name="saath_task_escalation",
                     template_params=[task.title, f"{days_left}d"],
+                    template_button_payload=f"claim:{task.id}",
+                    template_language="en_US",
                 )
 
             # Update status
