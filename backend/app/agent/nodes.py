@@ -6,10 +6,13 @@ and zero-setup code-based verification with complete integrity (no fake fallback
 """
 import base64
 import hashlib
+import io
 import json
 import logging
 import os
 import re
+import struct
+import wave
 from datetime import datetime, timezone, timedelta
 from typing import Any, Optional
 
@@ -307,6 +310,110 @@ async def _call_llm(prompt: str) -> Optional[str]:
         return None
 
 
+def _ensure_16k_mono_wav(audio_bytes: bytes) -> bytes:
+    """
+    Ensure audio data is formatted as 16 kHz mono 16-bit PCM WAV.
+    Meta's Muse Voice Transcribe model expects 16 kHz mono WAV input.
+    """
+    if not audio_bytes.startswith(b"RIFF"):
+        return audio_bytes  # Non-WAV container, return as-is
+    try:
+        with wave.open(io.BytesIO(audio_bytes), "rb") as wf:
+            channels = wf.getnchannels()
+            sampwidth = wf.getsampwidth()
+            framerate = wf.getframerate()
+            nframes = wf.getnframes()
+            raw_frames = wf.readframes(nframes)
+
+        if channels == 1 and framerate == 16000 and sampwidth == 2:
+            return audio_bytes
+
+        if sampwidth == 2:
+            num_samples = nframes * channels
+            samples = struct.unpack(f"<{num_samples}h", raw_frames)
+
+            # Convert to mono if multi-channel
+            if channels > 1:
+                mono_samples = [
+                    sum(samples[i * channels : (i + 1) * channels]) // channels
+                    for i in range(nframes)
+                ]
+            else:
+                mono_samples = list(samples)
+
+            # Resample to 16000 Hz if different
+            if framerate != 16000 and framerate > 0:
+                ratio = 16000 / framerate
+                new_len = int(len(mono_samples) * ratio)
+                resampled = [
+                    mono_samples[min(int(i / ratio), len(mono_samples) - 1)]
+                    for i in range(new_len)
+                ]
+                mono_samples = resampled
+
+            out_io = io.BytesIO()
+            with wave.open(out_io, "wb") as out_wf:
+                out_wf.setnchannels(1)
+                out_wf.setsampwidth(2)
+                out_wf.setframerate(16000)
+                out_wf.writeframes(struct.pack(f"<{len(mono_samples)}h", *mono_samples))
+            return out_io.getvalue()
+    except Exception as exc:
+        logger.warning(f"Audio conversion to 16k mono WAV failed: {exc}")
+    return audio_bytes
+
+
+async def _transcribe_audio_muse(file_bytes: bytes) -> Optional[str]:
+    """
+    Call Meta's Muse Voice Transcribe model via POST /v1/asr/transcribe with 16 kHz mono WAV.
+    """
+    api_key = settings.get_api_key()
+    if not api_key:
+        return None
+
+    wav_bytes = _ensure_16k_mono_wav(file_bytes)
+    base = settings.llm_base_url.rstrip("/")
+    asr_url = f"{base}/asr/transcribe"
+    headers = {"Authorization": f"Bearer {api_key}"}
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        # 1. Try multipart/form-data upload (standard ASR endpoint)
+        try:
+            files = {"file": ("audio.wav", wav_bytes, "audio/wav")}
+            data = {
+                "model": settings.muse_voice_model,
+                "language": "mr",
+                "response_format": "json",
+            }
+            resp = await client.post(asr_url, files=files, data=data, headers=headers)
+            if resp.status_code == 200:
+                res_data = resp.json()
+                text = res_data.get("text") or res_data.get("transcript") or ""
+                if text.strip():
+                    return text.strip()
+        except Exception as exc:
+            logger.warning(f"Muse Voice Transcribe multipart POST failed: {exc}")
+
+        # 2. Try JSON payload format
+        try:
+            b64_audio = base64.b64encode(wav_bytes).decode("utf-8")
+            json_payload = {
+                "model": settings.muse_voice_model,
+                "audio": b64_audio,
+                "language": "mr",
+            }
+            resp = await client.post(asr_url, json=json_payload, headers=headers)
+            if resp.status_code == 200:
+                res_data = resp.json()
+                text = res_data.get("text") or res_data.get("transcript") or ""
+                if text.strip():
+                    return text.strip()
+        except Exception as exc:
+            logger.warning(f"Muse Voice Transcribe JSON POST failed: {exc}")
+
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Node 1: Ingest
 # ---------------------------------------------------------------------------
@@ -392,25 +499,29 @@ async def node_perceive(state: AgentState) -> dict:
                 logger.error(f"Error reading file {file_url}: {e}")
 
         if artifact_type == "voice":
-            if file_bytes and client:
-                try:
-                    # Send audio to transcription or multimodal endpoint
-                    b64_audio = base64.b64encode(file_bytes).decode("utf-8")
-                    prompt = "Transcribe this spoken Marathi or Hindi voice note verbatim. Do not translate. Output Marathi/Hindi text."
-                    resp = await client.chat.completions.create(
-                        model=settings.muse_spark_model,
-                        temperature=0.0,
-                        messages=[{
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": prompt},
-                                {"type": "input_audio", "input_audio": {"data": b64_audio, "format": "wav"}},
-                            ],
-                        }],
-                    )
-                    raw_text = resp.choices[0].message.content or ""
-                except Exception as ex:
-                    logger.warning(f"Voice transcription via model failed: {ex}")
+            if file_bytes:
+                # 1. Call dedicated Muse Voice Transcribe model via POST /v1/asr/transcribe with 16 kHz mono WAV
+                raw_text = await _transcribe_audio_muse(file_bytes)
+
+                # 2. Fallback to multimodal chat model if ASR endpoint is unavailable
+                if not raw_text and client:
+                    try:
+                        b64_audio = base64.b64encode(file_bytes).decode("utf-8")
+                        prompt = "Transcribe this spoken Marathi or Hindi voice note verbatim. Do not translate. Output Marathi/Hindi text."
+                        resp = await client.chat.completions.create(
+                            model=settings.muse_spark_model,
+                            temperature=0.0,
+                            messages=[{
+                                "role": "user",
+                                "content": [
+                                    {"type": "text", "text": prompt},
+                                    {"type": "input_audio", "input_audio": {"data": b64_audio, "format": "wav"}},
+                                ],
+                            }],
+                        )
+                        raw_text = resp.choices[0].message.content or ""
+                    except Exception as ex:
+                        logger.warning(f"Voice transcription via chat fallback failed: {ex}")
 
             if not raw_text:
                 # Honest error response - no fake hardcoded electricity bills!
