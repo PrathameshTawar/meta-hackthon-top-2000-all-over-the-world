@@ -51,7 +51,17 @@ class Settings(BaseSettings):
         extra = "ignore"
 
     def get_api_key(self) -> str:
-        return self.llm_api_key or self.meta_api_key or os.getenv("BASETEN_API_KEY", "")
+        key = (self.llm_api_key or self.meta_api_key or os.getenv("BASETEN_API_KEY", "")).strip()
+        placeholders = {
+            "",
+            "your_meta_api_key_here",
+            "your-meta-api-key",
+            "your_api_key_here",
+            "your_key_here",
+            "your-key-here",
+            "change_me",
+        }
+        return "" if key in placeholders else key
 
 
 settings = Settings()
