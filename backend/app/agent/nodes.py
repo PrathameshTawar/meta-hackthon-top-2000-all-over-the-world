@@ -50,6 +50,10 @@ MEDICAL_KEYWORDS = [
     "रुग्णालय अहवाल", "डोस", "कन्सल्टेशन स्लिप", "mg/dl", "mmol/l"
 ]
 
+HINDI_MEDICAL = ["दवाई", "दवा", "गोली", "पर्चा", "जांच रिपोर्ट", "खुराक", "ब्लड रिपोर्ट"]
+BILL_SIGNALS = ["bill", "invoice", "amount payable", "total amount", "बिल", "रक्कम", "देय", "राशि", "भुगतान"]
+AMOUNT_RE = re.compile(r"(?:₹|rs\.?|inr)\s*[\d०-९,]+", re.I)
+
 CATEGORY_KEYWORDS = {
     TaskCategory.bill: [
         "bill", "electricity", "water", "gas", "power", "बिल", "वीज", "पाणी",
@@ -182,6 +186,46 @@ async def _log_event(
 # Verbatim Code-Based Heuristics (Zero-Hallucination Fallback)
 # ---------------------------------------------------------------------------
 
+def _find_date(raw_text: str) -> Optional[tuple[str, str]]:
+    """
+    Finds date in raw_text. Returns (iso_date_string, verbatim_quote) or None.
+    Supports ISO (YYYY-MM-DD), Marathi month names, and English month names.
+    """
+    # 1. ISO date (e.g., 2026-11-10)
+    iso_match = re.search(r"\b(202\d[-/]\d{1,2}[-/]\d{1,2})\b", raw_text)
+    if iso_match:
+        quote = iso_match.group(1)
+        try:
+            parts = re.split(r"[-/]", quote)
+            val = f"{int(parts[0]):04d}-{int(parts[1]):02d}-{int(parts[2]):02d}T00:00:00"
+            return val, quote
+        except Exception:
+            pass
+
+    # 2. Marathi Month Date (e.g. ३ नोव्हेंबर २०२६ or 10 नोव्हेंबर)
+    for m_name, m_num in MARATHI_MONTHS.items():
+        marathi_match = re.search(rf"([०-९\d]{{1,2}})\s+{m_name}(?:\s+([०-९\d]{{4}}))?", raw_text)
+        if marathi_match:
+            quote = marathi_match.group(0).strip()
+            day_str = marathi_match.group(1).translate(str.maketrans("०१२३४५६७८९", "0123456789"))
+            year_str = marathi_match.group(2)
+            year_str = year_str.translate(str.maketrans("०१२३४५६७८९", "0123456789")) if year_str else "2026"
+            val = f"{int(year_str):04d}-{m_num}-{int(day_str):02d}T00:00:00"
+            return val, quote
+
+    # 3. English Month Date (e.g. 10th Nov 2026 or 15 November 2026)
+    for eng_m, m_num in ENGLISH_MONTHS.items():
+        eng_match = re.search(rf"(\d{{1,2}})(?:st|nd|rd|th)?\s+{eng_m}[a-z]*(?:\s+(\d{{4}}))?", raw_text, re.IGNORECASE)
+        if eng_match:
+            quote = eng_match.group(0).strip()
+            day_str = eng_match.group(1)
+            year_str = eng_match.group(2) or "2026"
+            val = f"{int(year_str):04d}-{m_num}-{int(day_str):02d}T00:00:00"
+            return val, quote
+
+    return None
+
+
 def _heuristic_extract(raw_text: str) -> dict:
     """
     Code-based deterministic entity extraction.
@@ -215,41 +259,9 @@ def _heuristic_extract(raw_text: str) -> dict:
                 break
 
     # 2. Due Date Extraction
-    # ISO date (e.g., 2026-11-10)
-    iso_match = re.search(r"\b(202\d[-/]\d{1,2}[-/]\d{1,2})\b", raw_text)
-    if iso_match:
-        quote = iso_match.group(1)
-        try:
-            parts = re.split(r"[-/]", quote)
-            val = f"{int(parts[0]):04d}-{int(parts[1]):02d}-{int(parts[2]):02d}T00:00:00"
-            extracted["due_date"] = {"value": val, "quote": quote}
-        except Exception:
-            pass
-
-    # Marathi Month Date (e.g. ३ नोव्हेंबर २०२६ or 5 नोव्हेंबर)
-    if not extracted["due_date"]["value"]:
-        for m_name, m_num in MARATHI_MONTHS.items():
-            marathi_match = re.search(rf"([०-९\d]{{1,2}})\s+{m_name}(?:\s+([०-९\d]{{4}}))?", raw_text)
-            if marathi_match:
-                quote = marathi_match.group(0).strip()
-                day_str = marathi_match.group(1).translate(str.maketrans("०१२३४५६७८९", "0123456789"))
-                year_str = marathi_match.group(2)
-                year_str = year_str.translate(str.maketrans("०१२३४५६७८९", "0123456789")) if year_str else "2026"
-                val = f"{int(year_str):04d}-{m_num}-{int(day_str):02d}T00:00:00"
-                extracted["due_date"] = {"value": val, "quote": quote}
-                break
-
-    # English Month Date (e.g. 10th Nov 2026 or 15 November 2026)
-    if not extracted["due_date"]["value"]:
-        for eng_m, m_num in ENGLISH_MONTHS.items():
-            eng_match = re.search(rf"(\d{{1,2}})(?:st|nd|rd|th)?\s+{eng_m}[a-z]*(?:\s+(\d{{4}}))?", raw_text, re.IGNORECASE)
-            if eng_match:
-                quote = eng_match.group(0).strip()
-                day_str = eng_match.group(1)
-                year_str = eng_match.group(2) or "2026"
-                val = f"{int(year_str):04d}-{m_num}-{int(day_str):02d}T00:00:00"
-                extracted["due_date"] = {"value": val, "quote": quote}
-                break
+    date_info = _find_date(raw_text)
+    if date_info:
+        extracted["due_date"] = {"value": date_info[0], "quote": date_info[1]}
 
     # 3. Payee Extraction
     for needle, std_name in KNOWN_PAYEES:
@@ -541,9 +553,9 @@ async def node_perceive(state: AgentState) -> dict:
 
     # Infer doc_type from text
     low = raw_text.lower()
-    if any(w in low for w in ["lab report", "clinical report", "pathology", "glucose", "blood test", "lipid profile", "creatinine"]):
+    if any(w in low for w in ["lab report", "clinical report", "pathology", "glucose", "blood test", "lipid profile", "creatinine", "जांच रिपोर्ट", "ब्लड रिपोर्ट"]):
         doc_type = "lab_report"
-    elif any(w in low for w in ["prescription", "rx", "tablet", "dosage", "गोळ्या", "औषध"]):
+    elif any(w in low for w in ["prescription", "dosage", "गोळ्या", "औषध", "दवाई", "दवा", "गोली", "पर्चा", "खुराक"]):
         doc_type = "prescription"
     elif any(w in low for w in ["bill", "invoice", "बिल", "वीज", "electricity", "mgl", "gas"]):
         doc_type = "bill"
@@ -596,18 +608,25 @@ async def node_classify(state: AgentState) -> dict:
     if any(q in text_lower for q in ["काय बाकी आहे", "काय बाकी", "what is pending", "what's pending", "pending tasks"]):
         return {"category": "status_query"}
 
+    medical_context = False
     # 1. Critical Safeguard: Check MGL gas bill FIRST to ensure it is NEVER flagged as medical
     if any(w in text_lower for w in ["mgl", "mahanagar gas", "महानगर गॅस", "piped gas", "cng"]):
         category = TaskCategory.bill
-    # 2. Strict Medical Guardrail Check: lab reports, prescriptions, or explicit medication dosages
-    elif doc_type in ("prescription", "lab_report"):
-        category = TaskCategory.medical
-    elif any(kw in text_lower for kw in MEDICAL_KEYWORDS):
-        category = TaskCategory.medical
-    elif re.search(r"\b\d+\s?mg\b", text_lower):  # e.g., "500 mg" or "50mg"
-        category = TaskCategory.medical
     else:
-        category = None
+        diagnostic = (
+            any(k in text_lower for k in MEDICAL_KEYWORDS + HINDI_MEDICAL)
+            or doc_type in ("prescription", "lab_report")
+            or bool(re.search(r"\b\d+\s?mg\b", text_lower))
+        )
+        has_bill = any(s in text_lower for s in BILL_SIGNALS) and bool(AMOUNT_RE.search(raw_text))
+
+        if diagnostic and has_bill:
+            category = TaskCategory.bill
+            medical_context = True
+        elif diagnostic:
+            category = TaskCategory.medical
+        else:
+            category = None
 
         # Try Muse Spark Open LLM classification if client is configured
         prompt = (
@@ -647,7 +666,7 @@ async def node_classify(state: AgentState) -> dict:
         reason=f"Classified as {category.value}",
         payload={"category": category.value, "doc_type": doc_type},
     )
-    return {"category": category.value}
+    return {"category": category.value, "medical_context": medical_context}
 
 
 # ---------------------------------------------------------------------------
@@ -681,8 +700,8 @@ async def node_guardrail(state: AgentState) -> dict:
     Never invents fake hospitals or dates: only extracts what is present in text.
     """
     raw_text = state.get("raw_text", "")
-    date_match = re.search(r"\b(202\d[-/]\d{1,2}[-/]\d{1,2})\b", raw_text)
-    date_val = date_match.group(1) if date_match else None
+    date_info = _find_date(raw_text)
+    date_val = date_info[0] if date_info else None
 
     hospital = None
     for h in ["Sahyadri Hospital", "सह्याद्री हॉस्पिटल", "Ruby Hall Clinic", "KEM Hospital", "Dr Lal PathLabs", "Thyrocare"]:
@@ -696,23 +715,25 @@ async def node_guardrail(state: AgentState) -> dict:
         "transport_needed": True,
     }
 
-    # Record task with logistics only
-    async with AsyncSessionLocal() as db:
-        task = Task(
-            household_id=state["household_id"],
-            category=TaskCategory.medical,
-            title=f"वैद्यकीय अपॉइंटमेंट लॉजिस्टिक ({logistics['place']})",
-            amount=None,
-            due_date=datetime.fromisoformat(f"{date_val}T00:00:00") if date_val else None,
-            payee=hospital,
-            status=TaskStatus.done,
-            confidence=1.0,
-            recurrence=None,
-        )
-        db.add(task)
-        await db.commit()
-        await db.refresh(task)
-        task_id = task.id
+    # Record task with logistics only if date is found
+    task_id = None
+    if date_val:
+        async with AsyncSessionLocal() as db:
+            task = Task(
+                household_id=state["household_id"],
+                category=TaskCategory.medical,
+                title=f"वैद्यकीय अपॉइंटमेंट लॉजिस्टिक ({logistics['place']})",
+                amount=None,
+                due_date=datetime.fromisoformat(date_val),
+                payee=hospital,
+                status=TaskStatus.confirmed,
+                confidence=1.0,
+                recurrence=None,
+            )
+            db.add(task)
+            await db.commit()
+            await db.refresh(task)
+            task_id = task.id
 
     await _log_event(
         task_id=task_id,
@@ -728,7 +749,7 @@ async def node_guardrail(state: AgentState) -> dict:
         "sibling_notification": "",
         "call_script": None,
         "skip_to": "done",
-        "extracted": {"appointment_logistics": {"value": logistics, "quote": ""}},
+        "extracted": {"appointment_logistics": {"value": logistics, "quote": ""}} if date_val else {},
         "confidence": 1.0,
     }
 
@@ -1144,6 +1165,9 @@ async def node_draft(state: AgentState) -> dict:
         f"{'देय तारीख: ' + due_date[:10] + '. ' if due_date else ''}"
         f"काळजी करू नका, आम्ही वेळेवर सर्व पूर्ण करू. आम्ही तुमच्यासाठी हे करू."
     )
+
+    if state.get("medical_context"):
+        parent_reply += " (टीप: मला वैद्यकीय अहवाल किंवा गोळ्यांचा अर्थ सांगता येणार नाही. कृपया हे तुमच्या डॉक्टरांशी शेअर करा.)"
 
     # Sibling notification formatted for instant action & smartwatch readability
     watch_header = f"📌 {title}"

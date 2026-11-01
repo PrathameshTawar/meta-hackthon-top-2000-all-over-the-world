@@ -20,6 +20,7 @@ class AgentState(TypedDict, total=False):
 
     # --- classify ---
     category: str               # TaskCategory value
+    medical_context: bool       # True if medical content has bill signals (pharmacy/pathology bill)
 
     # --- extract ---
     extracted: dict             # {"amount": {"value": "₹1,234", "quote": "..."}, ...}

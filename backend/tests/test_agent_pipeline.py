@@ -857,3 +857,78 @@ async def test_p0_7_route_status_queries_away_from_task_creation():
             if isinstance(node_out, dict) and "parent_reply" in node_out:
                 parent_reply = node_out["parent_reply"]
     assert "बाकी असलेली कामे" in parent_reply or "कोणतीही बिले" in parent_reply
+
+
+# ---------------------------------------------------------------------------
+# P0-8 Tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_p0_8_medical_guardrail_and_bill_classification():
+    from app.agent.nodes import node_classify, node_draft, node_guardrail, GUARDRAIL_REPLY
+    from app.db.models import TaskCategory, TaskStatus, Task, Household
+    from app.db.session import AsyncSessionLocal
+    import random
+
+    # Table row 1: Apollo Pharmacy Bill -> bill
+    c1 = await node_classify({"raw_text": "अपोलो फार्मसी औषध बिल रक्कम ₹2,340 देय 15 नोव्हेंबर", "doc_type": "bill"})
+    assert c1["category"] == TaskCategory.bill
+    assert c1.get("medical_context") is True
+
+    # Table row 2: Dr Lal PathLabs Invoice -> bill
+    c2 = await node_classify({"raw_text": "Dr Lal PathLabs Invoice Amount Rs 1,200 due 20 Nov 2026", "doc_type": "other"})
+    assert c2["category"] == TaskCategory.bill
+    assert c2.get("medical_context") is True
+
+    # Table row 3: Sahyadri Hospital final bill with discharge summary -> bill
+    c3 = await node_classify({"raw_text": "Sahyadri Hospital final bill, see discharge summary. Amount payable Rs 45,000", "doc_type": "other"})
+    assert c3["category"] == TaskCategory.bill
+    assert c3.get("medical_context") is True
+
+    # Table row 4: Hindi prescription advice -> medical
+    c4 = await node_classify({"raw_text": "डॉक्टर ने दवाई लिखी है, रोज़ दो गोली सुबह शाम", "doc_type": "other"})
+    assert c4["category"] == TaskCategory.medical
+
+    # Pharmacy bill draft includes the "cannot interpret reports" sentence
+    d_res = await node_draft({
+        "household_id": 1,
+        "extracted": {
+            "title": {"value": "अपोलो फार्मसी बिल"},
+            "amount": {"value": "₹2,340"},
+            "due_date": {"value": "2026-11-15T00:00:00"},
+            "payee": {"value": "अपोलो फार्मसी"},
+        },
+        "category": TaskCategory.bill.value,
+        "medical_context": True,
+    })
+    assert "वैद्यकीय अहवाल किंवा गोळ्यांचा अर्थ सांगता येणार नाही" in d_res["parent_reply"]
+
+    # Guardrail with no date -> creates NO task
+    test_h_id = random.randint(10000, 99999)
+    async with AsyncSessionLocal() as db:
+        db.add(Household(id=test_h_id, name="Guardrail Test Family", primary_language="mr"))
+        await db.commit()
+
+    g_no_date = await node_guardrail({
+        "household_id": test_h_id,
+        "raw_text": "Take paracetamol twice daily for 5 days",
+    })
+    assert g_no_date["parent_reply"] == GUARDRAIL_REPLY
+    async with AsyncSessionLocal() as db:
+        from sqlalchemy import select
+        res = await db.execute(select(Task).where(Task.household_id == test_h_id))
+        assert len(res.scalars().all()) == 0
+
+    # Guardrail with date "10 नोव्हेंबर 2026" -> creates confirmed task
+    g_with_date = await node_guardrail({
+        "household_id": test_h_id,
+        "raw_text": "पुढील तपासणी सह्याद्री हॉस्पिटल येथे 10 नोव्हेंबर 2026 रोजी आहे.",
+    })
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(select(Task).where(Task.household_id == test_h_id))
+        tasks = res.scalars().all()
+        assert len(tasks) == 1
+        assert tasks[0].status == TaskStatus.confirmed
+        assert tasks[0].due_date is not None
+        assert tasks[0].due_date.month == 11
+        assert tasks[0].due_date.day == 10
