@@ -795,24 +795,8 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
     text_content = message.get("text", "").strip()
     if text_content and not any(k in message for k in ["photo", "voice", "audio", "document"]):
         if await _is_status_query(text_content):
-            async with AsyncSessionLocal() as db:
-                tasks_res = await db.execute(
-                    select(Task).where(
-                        Task.household_id == household_id,
-                        Task.status.in_([TaskStatus.new, TaskStatus.confirmed, TaskStatus.claimed, TaskStatus.escalated, TaskStatus.needs_review]),
-                    ).order_by(Task.due_date.asc())
-                )
-                pending_tasks = tasks_res.scalars().all()
-
-            if not pending_tasks:
-                reply = "सध्या कोणतीही बिले किंवा कामे बाकी नाहीत! सर्व कामे पूर्ण झाली आहेत. 🙏"
-            else:
-                lines = ["📋 *सध्या बाकी असलेली कामे*:"]
-                for i, t in enumerate(pending_tasks[:5], 1):
-                    amt = f" ({t.amount})" if t.amount else ""
-                    due = f" - देय: {t.due_date.strftime('%d %b')}" if t.due_date else ""
-                    lines.append(f"{i}. *{t.title}*{amt}{due}")
-                reply = "\n".join(lines)
+            from app.services.tasks import build_pending_tasks_reply
+            reply = await build_pending_tasks_reply(household_id)
 
             await _send_telegram_message(chat_id, reply)
             return {"ok": True}

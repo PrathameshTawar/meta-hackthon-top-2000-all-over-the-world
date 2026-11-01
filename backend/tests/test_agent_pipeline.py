@@ -795,3 +795,65 @@ async def test_p0_6_web_patch_recurrence(monkeypatch):
         )
         all_emis = recurring_res.scalars().all()
         assert len(all_emis) == 2
+
+
+# ---------------------------------------------------------------------------
+# P0-7 Tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_p0_7_route_status_queries_away_from_task_creation():
+    import uuid, random
+    from sqlalchemy import select
+    from app.agent.graph import get_compiled_graph
+    from app.db.models import Household, Task, TaskCategory, TaskStatus
+    from app.db.session import AsyncSessionLocal
+    from app.agent.state import AgentState
+
+    test_h_id = random.randint(10000, 99999)
+    async with AsyncSessionLocal() as db:
+        h = Household(id=test_h_id, name="Status Test Family", primary_language="mr")
+        db.add(h)
+        task = Task(
+            household_id=test_h_id,
+            category=TaskCategory.bill,
+            title="MSEDCL Bill",
+            amount="₹1,840",
+            status=TaskStatus.confirmed,
+        )
+        db.add(task)
+        await db.commit()
+
+    graph = await get_compiled_graph()
+    thread_id = f"test_status_{uuid.uuid4().hex[:6]}"
+    config = {"configurable": {"thread_id": thread_id}}
+
+    state: AgentState = {
+        "artifact_id": random.randint(10000, 99999),
+        "household_id": test_h_id,
+        "artifact_type": "voice",
+        "raw_text": "काय बाकी आहे?",
+        "errors": [],
+    }
+
+    final_state = None
+    interrupted = False
+    async for step in graph.astream(state, config=config):
+        if isinstance(step, dict) and "__interrupt__" in step:
+            interrupted = True
+        final_state = step
+
+    assert interrupted is False
+    # Check that no new task was created (still only 1 task in DB)
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(select(Task).where(Task.household_id == test_h_id))
+        tasks = res.scalars().all()
+        assert len(tasks) == 1
+
+    # Check parent_reply from final_state
+    parent_reply = ""
+    if final_state:
+        for node_out in final_state.values():
+            if isinstance(node_out, dict) and "parent_reply" in node_out:
+                parent_reply = node_out["parent_reply"]
+    assert "बाकी असलेली कामे" in parent_reply or "कोणतीही बिले" in parent_reply

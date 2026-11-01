@@ -125,3 +125,32 @@ async def complete_task(
         logger.warning(f"Failed to notify parents for task #{task.id}: {exc}")
 
     return DoneResult.ok, task
+
+
+async def build_pending_tasks_reply(household_id: int) -> str:
+    """Build a localized Marathi summary of pending tasks for a household."""
+    from sqlalchemy import select
+    async with AsyncSessionLocal() as db:
+        tasks_res = await db.execute(
+            select(Task).where(
+                Task.household_id == household_id,
+                Task.status.in_([
+                    TaskStatus.new,
+                    TaskStatus.confirmed,
+                    TaskStatus.claimed,
+                    TaskStatus.escalated,
+                    TaskStatus.needs_review,
+                ]),
+            ).order_by(Task.due_date.asc())
+        )
+        pending_tasks = tasks_res.scalars().all()
+
+    if not pending_tasks:
+        return "सध्या कोणतीही बिले किंवा कामे बाकी नाहीत! सर्व कामे पूर्ण झाली आहेत. 🙏"
+
+    lines = ["📋 *सध्या बाकी असलेली कामे*:"]
+    for i, t in enumerate(pending_tasks[:5], 1):
+        amt = f" ({t.amount})" if t.amount else ""
+        due = f" - देय: {t.due_date.strftime('%d %b')}" if t.due_date else ""
+        lines.append(f"{i}. *{t.title}*{amt}{due}")
+    return "\n".join(lines)

@@ -594,7 +594,7 @@ async def node_classify(state: AgentState) -> dict:
 
     # Check for voice status question ("काय बाकी आहे?" / "what is pending?")
     if any(q in text_lower for q in ["काय बाकी आहे", "काय बाकी", "what is pending", "what's pending", "pending tasks"]):
-        return {"category": TaskCategory.appointment}  # status queries handled cleanly
+        return {"category": "status_query"}
 
     # 1. Critical Safeguard: Check MGL gas bill FIRST to ensure it is NEVER flagged as medical
     if any(w in text_lower for w in ["mgl", "mahanagar gas", "महानगर गॅस", "piped gas", "cng"]):
@@ -653,6 +653,25 @@ async def node_classify(state: AgentState) -> dict:
 # ---------------------------------------------------------------------------
 # Node 4: Guardrail (Medical Logistics Only, Zero Medical Advice)
 # ---------------------------------------------------------------------------
+
+
+async def node_status(state: AgentState) -> dict:
+    """Handle status questions directly without creating tasks."""
+    from app.services.tasks import build_pending_tasks_reply
+    household_id = state.get("household_id") or 1
+    reply = await build_pending_tasks_reply(household_id)
+    await _log_event(
+        task_id=None,
+        household_id=household_id,
+        actor="agent:status",
+        action="answered_status",
+        reason="Answered voice status query",
+        payload={"query": state.get("raw_text", "")},
+    )
+    return {
+        "parent_reply": reply,
+        "sibling_notification": "",
+    }
 
 async def node_guardrail(state: AgentState) -> dict:
     """
