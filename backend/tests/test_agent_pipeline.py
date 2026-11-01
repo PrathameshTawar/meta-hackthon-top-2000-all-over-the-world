@@ -433,3 +433,82 @@ async def test_p0_2_confirmation_question_formatting():
     for r in reasons:
         assert "digits" not in r
         assert "quote" not in r
+
+
+# ---------------------------------------------------------------------------
+# P0-3 Tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_p0_3_escalation_triggers_on_status_not_unassigned(monkeypatch):
+    import uuid
+    from datetime import datetime, timedelta, timezone
+    from app.db.models import Household, Member, MemberRole, Task, TaskCategory, TaskStatus
+    from app.db.session import AsyncSessionLocal
+    from app.scheduler.escalation import run_escalation, get_ist_now
+    import app.scheduler.escalation as esc_module
+
+    notified = []
+    async def mock_notify(**kwargs):
+        notified.append(kwargs)
+    monkeypatch.setattr(esc_module, "notify", mock_notify)
+
+    unique_h_id = 903
+    async with AsyncSessionLocal() as db:
+        h = await db.get(Household, unique_h_id)
+        if not h:
+            h = Household(id=unique_h_id, name="Escalation Test Family", primary_language="mr")
+            db.add(h)
+            await db.flush()
+
+        child = Member(
+            household_id=unique_h_id,
+            name="Rohan",
+            role=MemberRole.child,
+            telegram_id=f"child_{uuid.uuid4().hex[:6]}",
+            phone=f"+9198{uuid.uuid4().hex[:8]}",
+        )
+        db.add(child)
+        await db.flush()
+
+        now_ist = get_ist_now()
+        # Task 1: Has assignee, status confirmed, due in 2 days (within escalation window)
+        t_confirmed = Task(
+            household_id=unique_h_id,
+            category=TaskCategory.bill,
+            title="Electricity Bill Due Soon",
+            amount="₹1,200",
+            status=TaskStatus.confirmed,
+            assignee_id=child.id,
+            due_date=(now_ist + timedelta(days=2)).replace(tzinfo=None),
+        )
+        # Task 2: Already claimed, due tomorrow -> should NOT escalate
+        t_claimed = Task(
+            household_id=unique_h_id,
+            category=TaskCategory.bill,
+            title="Internet Bill Claimed",
+            amount="₹800",
+            status=TaskStatus.claimed,
+            assignee_id=child.id,
+            due_date=(now_ist + timedelta(days=1)).replace(tzinfo=None),
+        )
+        db.add_all([t_confirmed, t_claimed])
+        await db.commit()
+        t_confirmed_id = t_confirmed.id
+        t_claimed_id = t_claimed.id
+
+    # Run escalation
+    escalated_ids = await run_escalation()
+
+    # Assertions
+    assert t_confirmed_id in escalated_ids
+    assert t_claimed_id not in escalated_ids
+
+    # Check task status in DB
+    async with AsyncSessionLocal() as db:
+        t_refreshed = await db.get(Task, t_confirmed_id)
+        assert t_refreshed.status == TaskStatus.escalated
+
+    # Run escalation again -> idempotent, shouldn't escalate again
+    escalated_again = await run_escalation()
+    assert t_confirmed_id not in escalated_again

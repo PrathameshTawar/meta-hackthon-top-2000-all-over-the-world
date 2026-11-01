@@ -12,7 +12,7 @@ from sqlalchemy import select
 from app.config import settings
 from app.db.models import Task, TaskStatus, Member, MemberRole, Event
 from app.db.session import AsyncSessionLocal
-from app.api.webhooks import notify
+from app.api.webhooks import notify, _clean_template_param
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +54,7 @@ async def run_escalation(simulated_days_ahead: int = 0) -> list[int]:
         result = await db.execute(
             select(Task).where(
                 Task.due_date <= threshold_naive,
-                Task.status.in_([TaskStatus.new, TaskStatus.confirmed]),
-                Task.assignee_id.is_(None),
+                Task.status.in_([TaskStatus.new, TaskStatus.confirmed, TaskStatus.needs_review]),
             )
         )
         overdue_tasks = result.scalars().all()
@@ -87,7 +86,7 @@ async def run_escalation(simulated_days_ahead: int = 0) -> list[int]:
                     text=message,
                     buttons=[{"id": f"claim:{task.id}", "title": "Claim Task"}],
                     template_name="saath_task_escalation",
-                    template_params=[task.title, f"{days_left}d"],
+                    template_params=[_clean_template_param(task.title), f"{days_left}d"],
                     template_button_payload=f"claim:{task.id}",
                     template_language="en_US",
                 )
