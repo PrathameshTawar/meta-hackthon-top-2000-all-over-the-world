@@ -932,3 +932,45 @@ async def test_p0_8_medical_guardrail_and_bill_classification():
         assert tasks[0].due_date is not None
         assert tasks[0].due_date.month == 11
         assert tasks[0].due_date.day == 10
+
+
+# ---------------------------------------------------------------------------
+# P1-9 Tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_p1_9_devanagari_and_normalized_quotes():
+    from app.agent.nodes import node_verify
+
+    # 1. Devanagari numerals: ₹1,840 vs ₹१,८४० passes verify
+    raw_text = "महावितरण वीज बिल देय रक्कम ₹१,८४० अंतिम तारीख 2026-11-20"
+    extracted = {
+        "amount": {"value": "₹1,840", "quote": "रक्कम ₹१,८४०"},
+        "due_date": {"value": "2026-11-20T00:00:00", "quote": "2026-11-20"},
+        "payee": {"value": "Mahavitaran (MSEDCL)", "quote": "महावितरण"},
+        "title": {"value": "वीज बिल", "quote": "वीज बिल"},
+    }
+    res = await node_verify({"raw_text": raw_text, "extracted": extracted, "confidence": 1.0})
+    assert res["verify_passed"] is True, f"Expected pass, got failures: {res.get('verify_failures')}"
+
+    # 2. Substring mismatch: extracted ₹184 vs quote ₹1,840 fails check 3
+    extracted_sub = {
+        "amount": {"value": "₹184", "quote": "रक्कम ₹१,८४०"},
+        "due_date": {"value": "2026-11-20T00:00:00", "quote": "2026-11-20"},
+        "payee": {"value": "Mahavitaran (MSEDCL)", "quote": "महावितरण"},
+        "title": {"value": "वीज बिल", "quote": "वीज बिल"},
+    }
+    res_sub = await node_verify({"raw_text": raw_text, "extracted": extracted_sub, "confidence": 1.0})
+    assert res_sub["verify_passed"] is False
+    assert any("amount" in f for f in res_sub["verify_failures"])
+
+    # 3. Extra internal whitespace or non-breaking spaces in quote passes verification if norm(quote) in norm(raw_text)
+    raw_text_ws = "टाटा पॉवर   देय रक्कम  ₹2,500   तारीख 2026-11-25"
+    extracted_ws = {
+        "amount": {"value": "₹2,500", "quote": "देय रक्कम ₹2,500"},
+        "due_date": {"value": "2026-11-25T00:00:00", "quote": "2026-11-25"},
+        "payee": {"value": "Tata Power", "quote": "टाटा पॉवर"},
+        "title": {"value": "टाटा पॉवर", "quote": "टाटा पॉवर"},
+    }
+    res_ws = await node_verify({"raw_text": raw_text_ws, "extracted": extracted_ws, "confidence": 1.0})
+    assert res_ws["verify_passed"] is True, f"Expected pass, got failures: {res_ws.get('verify_failures')}"

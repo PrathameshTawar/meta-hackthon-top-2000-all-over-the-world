@@ -18,9 +18,23 @@ import wave
 from datetime import datetime, timezone, timedelta
 from typing import Any, Optional
 
+import unicodedata
 import httpx
 from openai import AsyncOpenAI
 from sqlalchemy import select
+
+DEV_DIGITS = str.maketrans("०१२३४५६७८९", "0123456789")
+ZW = dict.fromkeys(map(ord, "\u200b\u200c\u200d\ufeff"))
+
+def norm(s: str) -> str:
+    s = unicodedata.normalize("NFC", s).translate(ZW)
+    return re.sub(r"\s+", " ", s).strip()
+
+def to_amount(s) -> float | None:
+    if s is None:
+        return None
+    m = re.search(r"\d[\d,]*(?:\.\d+)?", norm(str(s)).translate(DEV_DIGITS))
+    return float(m.group().replace(",", "")) if m else None
 
 from app.agent.state import AgentState
 from app.config import settings
@@ -800,7 +814,7 @@ Text:
                     for k in ["amount", "due_date", "payee", "title"]:
                         if k in parsed and isinstance(parsed[k], dict):
                             q = parsed[k].get("quote")
-                            if q and q not in raw_text:
+                            if q and norm(q) not in norm(raw_text):
                                 parsed[k]["quote"] = None
                                 parsed[k]["value"] = None
                     extracted = parsed
@@ -904,7 +918,7 @@ async def node_verify(state: AgentState) -> dict:
             continue
 
         # Check 1: Quote must appear verbatim in raw_text
-        if quote and quote not in raw_text:
+        if quote and norm(quote) not in norm(raw_text):
             failures.append(f"{field}: quote not found verbatim in source text")
 
         # Check 2: Date validity and not in past
@@ -917,11 +931,11 @@ async def node_verify(state: AgentState) -> dict:
                 failures.append(f"due_date {value!r} is not a valid ISO date")
 
         # Check 3: Amount digits must match quote digits
-        if field == "amount" and value and quote:
-            digits = re.sub(r"[^\d]", "", str(value))
-            quote_digits = re.sub(r"[^\d]", "", str(quote))
-            if digits and digits not in quote_digits:
-                failures.append(f"amount digits {digits} not in quote {quote}")
+        if field == "amount" and (value is not None or quote is not None):
+            amt_val = to_amount(value)
+            amt_quote = to_amount(quote)
+            if amt_val is None or amt_quote is None or amt_val != amt_quote:
+                failures.append(f"amount {value!r} does not match quote {quote!r}")
 
     confidence = state.get("confidence", 0.0)
     verify_passed = len(failures) == 0 and confidence >= 0.5
@@ -1102,7 +1116,7 @@ async def node_assign(state: AgentState) -> dict:
             if not isinstance(data, dict):
                 continue
             quote = data.get("quote")
-            if quote and quote in raw_text:
+            if quote and norm(quote) in norm(raw_text):
                 existing_ev = await db.execute(
                     select(Evidence).where(
                         Evidence.task_id == task_id,
