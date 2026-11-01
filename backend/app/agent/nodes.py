@@ -715,7 +715,7 @@ async def node_extract(state: AgentState) -> dict:
     from the source text, or field is null.
     """
     raw_text = state.get("raw_text", "")
-    extracted = None
+    extracted = state.get("extracted") or None
 
     prompt = f"""Extract the following fields from this text.
 For each field, return the value AND the exact quoted substring from the text that supports it.
@@ -738,7 +738,9 @@ Return ONLY valid JSON in this exact structure:
 Text:
 {raw_text[:2000]}
 """
-    if settings.get_api_key():
+    if state.get("extracted"):
+        extracted = state["extracted"]
+    elif settings.get_api_key():
         llm_resp = await _call_llm(prompt)
         if llm_resp:
             try:
@@ -753,7 +755,7 @@ Text:
                                 parsed[k]["value"] = None
                     extracted = parsed
             except Exception:
-                extracted = None
+                extracted = state.get("extracted") or None
 
         if not extracted:
             # Model was called but extraction failed or unparseable JSON
@@ -765,8 +767,8 @@ Text:
                 "parent_reply": "आम्हाला ही माहिती स्पष्टपणे वाचता आली नाही, कृपया पुन्हा पाठवा.",
             }
     else:
-        # No API key configured: do NOT fake model extraction
-        extracted = {}
+        # Fall back to deterministic heuristic extraction
+        extracted = _heuristic_extract(raw_text)
 
     # Compute confidence: fraction of key fields with both value and verbatim quote
     fields = ["amount", "due_date", "payee", "title"]

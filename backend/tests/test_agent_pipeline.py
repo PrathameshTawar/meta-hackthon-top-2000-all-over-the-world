@@ -335,3 +335,70 @@ async def test_parent_notification_on_task_done():
     # Should execute without errors even in simulated test environment
     await notify_parents_task_done(t, completed_by_name="अमित")
 
+
+
+
+# ---------------------------------------------------------------------------
+# P0-1 Tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_p0_1_stop_graph_on_failed_perception_and_empty_extraction(monkeypatch, tmp_path):
+    from app.agent.graph import build_graph
+    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+    from app.config import settings
+    import app.agent.nodes as nodes
+
+    db_file = str(tmp_path / "checkpoints_p0_1.db")
+    async with AsyncSqliteSaver.from_conn_string(db_file) as checkpointer:
+        await checkpointer.setup()
+        graph = build_graph().compile(checkpointer=checkpointer)
+
+        # 1. Perception yields empty text -> graph must terminate at perceive, no interrupt
+        state_empty_perceive: AgentState = {
+            "artifact_id": 9801,
+            "household_id": 1,
+            "artifact_type": "voice",
+            "file_url": "test://nonexistent_audio.ogg",
+            "raw_text": "",
+            "errors": [],
+        }
+        interrupted = False
+        final_output = None
+        config = {"configurable": {"thread_id": "p0_1_thread_1"}}
+        async for step in graph.astream(state_empty_perceive, config=config):
+            if isinstance(step, dict) and "__interrupt__" in step:
+                interrupted = True
+            final_output = step
+
+        assert interrupted is False
+        assert final_output is not None
+        assert "perceive" in final_output
+        assert "ऐकू आला नाही" in final_output["perceive"].get("parent_reply", "")
+
+        # 2. Extraction returning {} -> graph must terminate at extract, no interrupt
+        monkeypatch.setattr(settings.__class__, "get_api_key", lambda self: "mock_api_key")
+        async def mock_llm(prompt):
+            return "not json at all"
+        monkeypatch.setattr(nodes, "_call_llm", mock_llm)
+
+        state_empty_extract: AgentState = {
+            "artifact_id": 9802,
+            "household_id": 1,
+            "artifact_type": "image",
+            "file_url": "test://unparseable.png",
+            "raw_text": "Random gibberish that has no fields",
+            "category": TaskCategory.bill.value,
+            "errors": [],
+        }
+        interrupted_2 = False
+        final_output_2 = None
+        config_2 = {"configurable": {"thread_id": "p0_1_thread_2"}}
+        async for step in graph.astream(state_empty_extract, config=config_2):
+            if isinstance(step, dict) and "__interrupt__" in step:
+                interrupted_2 = True
+            final_output_2 = step
+
+        assert interrupted_2 is False
+        assert final_output_2 is not None
+        assert "extract" in final_output_2

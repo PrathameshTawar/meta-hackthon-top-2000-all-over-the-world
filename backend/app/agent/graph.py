@@ -36,6 +36,14 @@ from app.agent.nodes import (
 logger = logging.getLogger(__name__)
 
 
+def route_after_perceive(state: AgentState) -> str:
+    return "classify" if state.get("raw_text") else END
+
+
+def route_after_extract(state: AgentState) -> str:
+    return "verify" if state.get("extracted") else END
+
+
 def route_after_classify(state: AgentState) -> str:
     """After classification, branch to guardrail for medical content."""
     if state.get("category") == "medical":
@@ -113,7 +121,7 @@ def build_graph() -> StateGraph:
     # Edges
     graph.set_entry_point("ingest")
     graph.add_edge("ingest", "perceive")
-    graph.add_edge("perceive", "classify")
+    graph.add_conditional_edges("perceive", route_after_perceive, {"classify": "classify", END: END})
 
     graph.add_conditional_edges(
         "classify",
@@ -122,7 +130,7 @@ def build_graph() -> StateGraph:
     )
 
     graph.add_edge("guardrail", END)
-    graph.add_edge("extract", "verify")
+    graph.add_conditional_edges("extract", route_after_extract, {"verify": "verify", END: END})
 
     graph.add_conditional_edges(
         "verify",
