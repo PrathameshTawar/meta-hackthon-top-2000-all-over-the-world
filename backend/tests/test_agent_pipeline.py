@@ -180,13 +180,12 @@ async def test_langgraph_persistent_interrupt_and_resume():
     from app.agent.graph import get_compiled_graph
     from langgraph.types import Command
 
-    import uuid
+    import uuid, random
     from app.db.models import Household
+    test_h_id = random.randint(20000, 89999)
     async with AsyncSessionLocal() as db:
-        h = await db.get(Household, 9991)
-        if not h:
-            db.add(Household(id=9991, name="Interrupt Test Family", primary_language="mr"))
-            await db.commit()
+        db.add(Household(id=test_h_id, name="Interrupt Test Family", primary_language="mr"))
+        await db.commit()
 
     graph = await get_compiled_graph()
     thread_id = f"test_interrupt_pipeline_{uuid.uuid4().hex[:6]}"
@@ -194,8 +193,8 @@ async def test_langgraph_persistent_interrupt_and_resume():
 
     # Initial state with blurry/unverified quote that fails node_verify
     initial_state: AgentState = {
-        "artifact_id": 9991,
-        "household_id": 9991,
+        "artifact_id": test_h_id,
+        "household_id": test_h_id,
         "artifact_type": "image",
         "file_url": "test://blurry_bill.png",
         "raw_text": "Mahavitaran Bill",
@@ -547,3 +546,102 @@ async def test_p0_4_suppress_sibling_alert_on_duplicate():
     assert res.get("call_script") is None
     parent_reply = res.get("parent_reply", "")
     assert "आधीच" in parent_reply
+
+
+# ---------------------------------------------------------------------------
+# P0-5 Tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_p0_5_serialize_agent_runs_per_household(monkeypatch):
+    import uuid
+    import asyncio
+    from sqlalchemy import select
+    from app.config import settings
+    from app.db.models import Household, Member, MemberRole, Artifact, ArtifactType, Task, TaskStatus
+    from app.db.session import AsyncSessionLocal
+    from app.api.webhooks import _run_agent
+    import app.agent.nodes as nodes
+    import app.api.webhooks as wh_module
+
+    async def noop_async(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(wh_module, "_send_telegram_message", noop_async)
+    monkeypatch.setattr(wh_module, "_send_whatsapp_message", noop_async)
+    monkeypatch.setattr(wh_module, "notify", noop_async)
+    monkeypatch.setattr(wh_module, "_notify_siblings_new_task", noop_async)
+    monkeypatch.setattr(settings.__class__, "get_api_key", lambda self: "mock_api_key")
+
+    deterministic_json = """{
+        "category": "bill",
+        "title": {"value": "Electricity bill", "quote": "bill"},
+        "payee": {"value": "MSEDCL", "quote": "MSEDCL"},
+        "amount": {"value": "₹1,840", "quote": "1840"},
+        "due_date": {"value": "2026-11-20T00:00:00", "quote": "2026-11-20"},
+        "consumer_number": {"value": "020010001234", "quote": "020010001234"}
+    }"""
+
+    async def mock_call_llm(prompt: str, json_mode: bool = False) -> str:
+        await asyncio.sleep(0.05)
+        return deterministic_json
+
+    monkeypatch.setattr(nodes, "_call_llm", mock_call_llm)
+
+    import random
+    unique_h_id = random.randint(10000, 99999)
+    async with AsyncSessionLocal() as db:
+        h = await db.get(Household, unique_h_id)
+        if not h:
+            h = Household(id=unique_h_id, name="Concurrent Test Family", primary_language="mr")
+            db.add(h)
+            await db.flush()
+
+        child = Member(
+            household_id=unique_h_id,
+            name="Amit",
+            role=MemberRole.child,
+            telegram_id=f"child_{uuid.uuid4().hex[:6]}",
+            phone=f"+9198{uuid.uuid4().hex[:8]}",
+        )
+        parent = Member(
+            household_id=unique_h_id,
+            name="Baba",
+            role=MemberRole.parent,
+            telegram_id=f"parent_{uuid.uuid4().hex[:6]}",
+            phone=f"+9198{uuid.uuid4().hex[:8]}",
+        )
+        db.add_all([child, parent])
+        await db.flush()
+
+        art1 = Artifact(
+            household_id=unique_h_id,
+            type=ArtifactType.image,
+            file_url="text://message",
+            raw_text="महावितरण वीज bill MSEDCL 1840 due 2026-11-20 consumer 020010001234",
+        )
+        art2 = Artifact(
+            household_id=unique_h_id,
+            type=ArtifactType.image,
+            file_url="text://message",
+            raw_text="Electricity bill MSEDCL amount 1840 due date 2026-11-20 consumer 020010001234",
+        )
+        db.add_all([art1, art2])
+        await db.commit()
+        art1_id = art1.id
+        art2_id = art2.id
+
+    await asyncio.gather(
+        _run_agent(art1_id, unique_h_id, "image", "text://message", "chat_1", "telegram"),
+        _run_agent(art2_id, unique_h_id, "image", "text://message", "chat_2", "telegram"),
+    )
+
+    async with AsyncSessionLocal() as db:
+        tasks_res = await db.execute(
+            select(Task).where(
+                Task.household_id == unique_h_id,
+                Task.status.notin_([TaskStatus.done]),
+            )
+        )
+        tasks = tasks_res.scalars().all()
+        assert len(tasks) == 1, f"Expected 1 task but found {len(tasks)}"

@@ -160,37 +160,68 @@ _checkpointer: Optional[AsyncSqliteSaver] = None
 _compiled_graph: Optional[Any] = None
 
 
+import asyncio
+
+_checkpointer_locks: dict[Any, asyncio.Lock] = {}
+_graph_locks: dict[Any, asyncio.Lock] = {}
+_checkpointer_loop = None
+
+def _get_cp_lock() -> asyncio.Lock:
+    loop = asyncio.get_running_loop()
+    if loop not in _checkpointer_locks:
+        _checkpointer_locks[loop] = asyncio.Lock()
+    return _checkpointer_locks[loop]
+
+def _get_graph_lock() -> asyncio.Lock:
+    loop = asyncio.get_running_loop()
+    if loop not in _graph_locks:
+        _graph_locks[loop] = asyncio.Lock()
+    return _graph_locks[loop]
+
 async def get_checkpointer() -> AsyncSqliteSaver:
-    global _checkpointer_cm, _checkpointer
-    if _checkpointer is None:
-        db_path = getattr(settings, "checkpoints_db_path", "data/checkpoints.db")
-        dir_name = os.path.dirname(os.path.abspath(db_path))
-        if dir_name:
-            os.makedirs(dir_name, exist_ok=True)
-        _checkpointer_cm = AsyncSqliteSaver.from_conn_string(db_path)
-        _checkpointer = await _checkpointer_cm.__aenter__()
-        await _checkpointer.setup()
-    return _checkpointer
+    global _checkpointer_cm, _checkpointer, _checkpointer_loop, _compiled_graph
+    current_loop = asyncio.get_running_loop()
+    async with _get_cp_lock():
+        if _checkpointer is None or _checkpointer_loop is not current_loop:
+            if _checkpointer_cm is not None:
+                try:
+                    await _checkpointer_cm.__aexit__(None, None, None)
+                except Exception:
+                    pass
+            db_path = getattr(settings, "checkpoints_db_path", "data/checkpoints.db")
+            dir_name = os.path.dirname(os.path.abspath(db_path))
+            if dir_name:
+                os.makedirs(dir_name, exist_ok=True)
+            _checkpointer_cm = AsyncSqliteSaver.from_conn_string(db_path)
+            _checkpointer = await _checkpointer_cm.__aenter__()
+            await _checkpointer.setup()
+            _checkpointer_loop = current_loop
+            _compiled_graph = None
+        return _checkpointer
 
 
 async def close_checkpointer():
-    global _checkpointer_cm, _checkpointer, _compiled_graph
-    if _checkpointer_cm is not None:
-        try:
-            await _checkpointer_cm.__aexit__(None, None, None)
-        except Exception:
-            pass
-        _checkpointer_cm = None
-        _checkpointer = None
-        _compiled_graph = None
+    global _checkpointer_cm, _checkpointer, _compiled_graph, _checkpointer_loop
+    async with _get_cp_lock():
+        if _checkpointer_cm is not None:
+            try:
+                await _checkpointer_cm.__aexit__(None, None, None)
+            except Exception:
+                pass
+            _checkpointer_cm = None
+            _checkpointer = None
+            _compiled_graph = None
+            _checkpointer_loop = None
 
 
 async def get_compiled_graph():
-    global _compiled_graph
-    if _compiled_graph is None:
-        checkpointer = await get_checkpointer()
-        _compiled_graph = build_graph().compile(checkpointer=checkpointer)
-    return _compiled_graph
+    global _compiled_graph, _checkpointer_loop
+    current_loop = asyncio.get_running_loop()
+    async with _get_graph_lock():
+        if _compiled_graph is None or _checkpointer_loop is not current_loop:
+            checkpointer = await get_checkpointer()
+            _compiled_graph = build_graph().compile(checkpointer=checkpointer)
+        return _compiled_graph
 
 
 class LazyCompiledGraph:

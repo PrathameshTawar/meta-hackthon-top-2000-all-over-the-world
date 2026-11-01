@@ -11,7 +11,12 @@ import os
 import re
 import tempfile
 import logging
-from collections import deque
+from collections import deque, defaultdict
+import asyncio
+
+# In-memory per-household lock to serialize agent runs and prevent deduplication race conditions.
+# Note: Multi-process deployments (e.g. multi-worker Uvicorn or Celery) require a distributed DB-level constraint or Redis lock instead.
+_household_locks: dict[int, asyncio.Lock] = defaultdict(asyncio.Lock)
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -374,12 +379,13 @@ async def _run_agent(artifact_id: int, household_id: int, artifact_type: str, fi
         final_state = None
         interrupted_question = None
 
-        async for step in graph.astream(initial_state, config=config):
-            if isinstance(step, dict) and "__interrupt__" in step:
-                interrupts = step["__interrupt__"]
-                if interrupts and len(interrupts) > 0:
-                    interrupted_question = str(interrupts[0].value)
-            final_state = step
+        async with _household_locks[household_id]:
+            async for step in graph.astream(initial_state, config=config):
+                if isinstance(step, dict) and "__interrupt__" in step:
+                    interrupts = step["__interrupt__"]
+                    if interrupts and len(interrupts) > 0:
+                        interrupted_question = str(interrupts[0].value)
+                final_state = step
 
         # If interrupted: route confirmation question to the category-owner sibling, not the elderly parent
         if interrupted_question:
@@ -573,8 +579,9 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
                 graph = await get_compiled_graph()
                 config = {"configurable": {"thread_id": str(artifact_id)}}
                 final_state = None
-                async for step in graph.astream(Command(resume={"confirmed": True}), config=config):
-                    final_state = step
+                async with _household_locks[member.household_id]:
+                    async for step in graph.astream(Command(resume={"confirmed": True}), config=config):
+                        final_state = step
 
                 state = {}
                 if final_state:
@@ -620,8 +627,9 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
 
                 graph = await get_compiled_graph()
                 config = {"configurable": {"thread_id": str(artifact_id)}}
-                async for step in graph.astream(Command(resume={"confirmed": False}), config=config):
-                    pass
+                async with _household_locks[member.household_id]:
+                    async for step in graph.astream(Command(resume={"confirmed": False}), config=config):
+                        pass
 
                 await _answer_callback_query(cb_id, "माहिती रद्द केली.")
                 await _send_telegram_message(
@@ -1125,8 +1133,9 @@ async def process_single_whatsapp_message(msg: dict):
             graph = await get_compiled_graph()
             config = {"configurable": {"thread_id": str(artifact_id)}}
             final_state = None
-            async for step in graph.astream(Command(resume={"confirmed": True}), config=config):
-                final_state = step
+            async with _household_locks[member.household_id]:
+                async for step in graph.astream(Command(resume={"confirmed": True}), config=config):
+                    final_state = step
             await _send_whatsapp_message(
                 from_phone,
                 "✅ माहितीची पुष्टी झाली! काम कुटुंब बोर्डवर जोडले आहे. 🙏"
@@ -1156,8 +1165,9 @@ async def process_single_whatsapp_message(msg: dict):
 
             graph = await get_compiled_graph()
             config = {"configurable": {"thread_id": str(artifact_id)}}
-            async for step in graph.astream(Command(resume={"confirmed": False}), config=config):
-                pass
+            async with _household_locks[member.household_id]:
+                async for step in graph.astream(Command(resume={"confirmed": False}), config=config):
+                    pass
             await _send_whatsapp_message(
                 from_phone,
                 "❌ ठीक आहे, आम्ही हे काम रद्द केले आहे. कृपया पुन्हा पाठवा. 🙏"

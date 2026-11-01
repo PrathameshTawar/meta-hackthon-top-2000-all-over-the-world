@@ -410,6 +410,16 @@ async def node_perceive(state: AgentState) -> dict:
 
     client = get_openai_client()
 
+    # If raw_text is not provided in state, check if Artifact in DB already has it
+    if not raw_text and state.get("artifact_id"):
+        try:
+            async with AsyncSessionLocal() as db:
+                art = await db.get(Artifact, state["artifact_id"])
+                if art and art.raw_text:
+                    raw_text = art.raw_text
+        except Exception as e:
+            logger.warning(f"Failed to fetch artifact raw_text: {e}")
+
     # If raw_text is already provided (e.g. from seed data, synthetic eval items, or direct text), use it
     if not raw_text:
         # Download real file bytes if needed
