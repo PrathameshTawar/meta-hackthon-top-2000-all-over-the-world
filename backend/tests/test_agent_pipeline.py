@@ -180,14 +180,22 @@ async def test_langgraph_persistent_interrupt_and_resume():
     from app.agent.graph import get_compiled_graph
     from langgraph.types import Command
 
+    import uuid
+    from app.db.models import Household
+    async with AsyncSessionLocal() as db:
+        h = await db.get(Household, 9991)
+        if not h:
+            db.add(Household(id=9991, name="Interrupt Test Family", primary_language="mr"))
+            await db.commit()
+
     graph = await get_compiled_graph()
-    thread_id = "test_interrupt_pipeline_1"
+    thread_id = f"test_interrupt_pipeline_{uuid.uuid4().hex[:6]}"
     config = {"configurable": {"thread_id": thread_id}}
 
     # Initial state with blurry/unverified quote that fails node_verify
     initial_state: AgentState = {
         "artifact_id": 9991,
-        "household_id": 1,
+        "household_id": 9991,
         "artifact_type": "image",
         "file_url": "test://blurry_bill.png",
         "raw_text": "Mahavitaran Bill",
@@ -512,3 +520,30 @@ async def test_p0_3_escalation_triggers_on_status_not_unassigned(monkeypatch):
     # Run escalation again -> idempotent, shouldn't escalate again
     escalated_again = await run_escalation()
     assert t_confirmed_id not in escalated_again
+
+
+# ---------------------------------------------------------------------------
+# P0-4 Tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_p0_4_suppress_sibling_alert_on_duplicate():
+    from app.agent.nodes import node_draft
+
+    state: AgentState = {
+        "existing_task_id": 5,
+        "household_id": 1,
+        "extracted": {
+            "title": {"value": "MSEDCL Electricity Bill"},
+            "amount": {"value": "₹1,840"},
+            "due_date": {"value": "2026-11-20T00:00:00"},
+            "payee": {"value": "MSEDCL"},
+        },
+        "category": "bill",
+    }
+
+    res = await node_draft(state)
+    assert res.get("sibling_notification") == ""
+    assert res.get("call_script") is None
+    parent_reply = res.get("parent_reply", "")
+    assert "आधीच" in parent_reply

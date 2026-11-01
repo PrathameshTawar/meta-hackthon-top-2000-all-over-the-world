@@ -1087,6 +1087,21 @@ async def node_assign(state: AgentState) -> dict:
 
 async def node_draft(state: AgentState) -> dict:
     """Draft Marathi reply to parent, sibling notification, optional call script."""
+    if state.get("existing_task_id"):
+        parent_reply = "हे बिल आधीच नोंदवले आहे. काळजी करू नका, आम्ही लक्ष ठेवत आहोत. 🙏"
+        await _log_event(
+            task_id=state.get("existing_task_id"),
+            household_id=state.get("household_id"),
+            actor="agent:draft",
+            action="drafted_duplicate",
+            reason="Merged duplicate task; suppressed sibling notification",
+            payload={"existing_task_id": state.get("existing_task_id")},
+        )
+        return {
+            "parent_reply": parent_reply,
+            "sibling_notification": "",
+            "call_script": None,
+        }
     extracted = state.get("extracted", {})
     title = (extracted.get("title") or {}).get("value") or "काम"
     amount = (extracted.get("amount") or {}).get("value") or ""
