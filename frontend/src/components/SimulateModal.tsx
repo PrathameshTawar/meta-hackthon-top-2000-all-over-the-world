@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { simulateIngest } from "@/lib/api";
-import { X, Play, Sparkles, Mic, FileText, ShieldAlert, CopyCheck } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { simulateIngest, getHealthSummary, simulateDoseNow, simulateSkipHealth } from "@/lib/api";
+import { X, Play, Sparkles, Mic, FileText, ShieldAlert, CopyCheck, HeartPulse, Clock, FastForward, Pill } from "lucide-react";
 import clsx from "clsx";
 
 interface SimulateModalProps {
@@ -45,19 +45,56 @@ const PRESETS = [
     text: "MSEDCL Electricity Bill. Amount: ₹1,840. Due Date: 2026-11-03. Payee: Mahavitaran (MSEDCL). Duplicate invoice submission.",
     note: "Matches existing bill; merges evidence instead of creating a duplicate task",
   },
+  {
+    title: "5. Parent Voice: Blood Pressure Reading (Vitals)",
+    type: "voice",
+    icon: HeartPulse,
+    color: "border-emerald-300 bg-emerald-50/50 hover:bg-emerald-50",
+    text: "आज बीपी १५०/९५ आहे",
+    note: "Extracts BP 150/95, validates verbatim quote, checks family limit (value_1 > 150) and alerts child",
+  },
 ];
 
 export function SimulateModal({ householdId, isOpen, onClose }: SimulateModalProps) {
   const queryClient = useQueryClient();
   const [selectedText, setSelectedText] = useState(PRESETS[0].text);
   const [selectedType, setSelectedType] = useState(PRESETS[0].type);
+  const [selectedMedId, setSelectedMedId] = useState<number | undefined>(undefined);
+  const [healthActionMessage, setHealthActionMessage] = useState<string | null>(null);
+
+  const { data: healthSummary } = useQuery({
+    queryKey: ["healthSummary", householdId],
+    queryFn: () => getHealthSummary(householdId),
+    enabled: isOpen,
+  });
+
+  const medications = healthSummary?.active_medications || [];
 
   const ingestMutation = useMutation({
     mutationFn: () => simulateIngest({ type: selectedType, raw_text: selectedText, household_id: householdId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks", householdId] });
       queryClient.invalidateQueries({ queryKey: ["events", householdId] });
+      queryClient.invalidateQueries({ queryKey: ["healthSummary", householdId] });
       onClose();
+    },
+  });
+
+  const doseNowMutation = useMutation({
+    mutationFn: (medId: number) => simulateDoseNow(medId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["healthSummary", householdId] });
+      setHealthActionMessage("✅ Dose reminder sent to parent immediately!");
+      setTimeout(() => setHealthActionMessage(null), 3500);
+    },
+  });
+
+  const skipHealthMutation = useMutation({
+    mutationFn: () => simulateSkipHealth(120),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["healthSummary", householdId] });
+      setHealthActionMessage(`⚡ Advanced 2 hours: ${res.escalated_doses_count} missed dose(s) escalated to child!`);
+      setTimeout(() => setHealthActionMessage(null), 3500);
     },
   });
 
@@ -120,14 +157,86 @@ export function SimulateModal({ householdId, isOpen, onClose }: SimulateModalPro
 
           <div>
             <label className="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-1.5">
-              Raw Text / Transcript Content
+              Raw Text / Transcript Content (or Simulate Vital)
             </label>
             <textarea
               value={selectedText}
               onChange={(e) => setSelectedText(e.target.value)}
-              rows={4}
+              rows={3}
               className="w-full text-xs font-mono p-3 rounded-xl border border-gray-200 focus:outline-hidden focus:ring-2 focus:ring-brand-500 bg-gray-50/50"
             />
+          </div>
+
+          {/* Health Module Admin Tools */}
+          <div className="border border-emerald-200 rounded-xl p-4 bg-emerald-50/40 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                <Pill size={14} className="text-emerald-600" />
+                Health Module Simulation Tools (H-2 & H-3)
+              </span>
+              {healthActionMessage && (
+                <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md border border-emerald-300">
+                  {healthActionMessage}
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              {/* Send dose reminder now */}
+              <div className="bg-white border border-emerald-200/80 rounded-lg p-2.5 space-y-2">
+                <label className="block text-[11px] font-semibold text-gray-700">
+                  Send Dose Reminder Now
+                </label>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={selectedMedId || medications[0]?.id || ""}
+                    onChange={(e) => setSelectedMedId(Number(e.target.value))}
+                    className="flex-1 text-xs border border-gray-200 rounded-lg p-1.5 bg-gray-50"
+                  >
+                    {medications.length === 0 ? (
+                      <option value="">No active meds</option>
+                    ) : (
+                      medications.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} ({m.dose_text})
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  <button
+                    onClick={() => {
+                      const idToUse = selectedMedId || medications[0]?.id;
+                      if (idToUse) doseNowMutation.mutate(idToUse);
+                    }}
+                    disabled={doseNowMutation.isPending || medications.length === 0}
+                    className="px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer flex items-center gap-1 shrink-0"
+                  >
+                    <Clock size={12} />
+                    Dose Now
+                  </button>
+                </div>
+              </div>
+
+              {/* Skip 2 hours */}
+              <div className="bg-white border border-amber-200/80 rounded-lg p-2.5 space-y-2">
+                <label className="block text-[11px] font-semibold text-gray-700">
+                  Adherence Escalation
+                </label>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-gray-500">
+                    Advances clock +2h to test missed dose escalation
+                  </span>
+                  <button
+                    onClick={() => skipHealthMutation.mutate()}
+                    disabled={skipHealthMutation.isPending}
+                    className="px-2.5 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-semibold hover:bg-amber-700 disabled:opacity-50 cursor-pointer flex items-center gap-1 shrink-0"
+                  >
+                    <FastForward size={12} />
+                    Skip 2h
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

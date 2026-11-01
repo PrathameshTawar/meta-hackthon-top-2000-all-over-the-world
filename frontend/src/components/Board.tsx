@@ -9,7 +9,8 @@ import { MembersBar } from "./MembersBar";
 import { MonthCommitmentBar } from "./MonthCommitmentBar";
 import { AuditLogModal } from "./AuditLogModal";
 import { SimulateModal } from "./SimulateModal";
-import { FastForward, Sparkles, Activity, RotateCcw, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { HealthPanel } from "./HealthPanel";
+import { FastForward, Sparkles, Activity, RotateCcw, AlertTriangle, CheckCircle2, HeartPulse, CheckSquare } from "lucide-react";
 
 const COLUMNS: { statuses: TaskStatus[]; label: string; color: string }[] = [
   { statuses: ["new", "confirmed", "escalated"], label: "New & Pending", color: "bg-blue-50/70 border-blue-200" },
@@ -24,6 +25,7 @@ interface BoardProps {
 
 export function Board({ householdId }: BoardProps) {
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<"tasks" | "health">("tasks");
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isAuditOpen, setIsAuditOpen] = useState(false);
   const [isSimulateOpen, setIsSimulateOpen] = useState(false);
@@ -76,8 +78,33 @@ export function Board({ householdId }: BoardProps) {
 
       {/* Action / Toolbar */}
       <div className="bg-white border-b border-gray-200 px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
-        {/* Members status */}
+        {/* Tab Switcher & Members status */}
         <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
+            <button
+              onClick={() => setActiveTab("tasks")}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                activeTab === "tasks"
+                  ? "bg-white text-gray-900 shadow-2xs"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              <CheckSquare size={13} />
+              Tasks / कामे
+            </button>
+            <button
+              onClick={() => setActiveTab("health")}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                activeTab === "health"
+                  ? "bg-white text-rose-600 shadow-2xs"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              <HeartPulse size={13} />
+              Health / आरोग्य
+            </button>
+          </div>
+
           <MembersBar members={members} tasks={tasks} />
         </div>
 
@@ -127,34 +154,38 @@ export function Board({ householdId }: BoardProps) {
         </div>
       </div>
 
-      {/* Kanban columns + detail panel */}
-      <div className="flex flex-1 overflow-hidden bg-slate-50/50">
-        <div className="flex flex-1 gap-4 p-6 overflow-x-auto">
-          {COLUMNS.map((col) => {
-            const colTasks = tasks.filter((t) => col.statuses.includes(t.status));
-            return (
-              <TaskColumn
-                key={col.label}
-                label={col.label}
-                colorClass={col.color}
-                tasks={colTasks}
-                members={members}
-                onSelect={setSelectedTask}
-                selectedId={selectedTask?.id ?? null}
-              />
-            );
-          })}
-        </div>
+      {/* Main Content: Tasks Board vs Health Panel */}
+      {activeTab === "health" ? (
+        <HealthPanel householdId={householdId} members={members} />
+      ) : (
+        <div className="flex flex-1 overflow-hidden bg-slate-50/50">
+          <div className="flex flex-1 gap-4 p-6 overflow-x-auto">
+            {COLUMNS.map((col) => {
+              const colTasks = tasks.filter((t) => col.statuses.includes(t.status));
+              return (
+                <TaskColumn
+                  key={col.label}
+                  label={col.label}
+                  colorClass={col.color}
+                  tasks={colTasks}
+                  members={members}
+                  onSelect={setSelectedTask}
+                  selectedId={selectedTask?.id ?? null}
+                />
+              );
+            })}
+          </div>
 
-        {/* Evidence / detail side panel */}
-        {selectedTask && (
-          <TaskDetailPanel
-            task={selectedTask}
-            members={members}
-            onClose={() => setSelectedTask(null)}
-          />
-        )}
-      </div>
+          {/* Evidence / detail side panel */}
+          {selectedTask && (
+            <TaskDetailPanel
+              task={selectedTask}
+              members={members}
+              onClose={() => setSelectedTask(null)}
+            />
+          )}
+        </div>
+      )}
 
       {/* Modals */}
       <AuditLogModal

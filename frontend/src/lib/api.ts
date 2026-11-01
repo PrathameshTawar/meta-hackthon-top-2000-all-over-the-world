@@ -98,3 +98,86 @@ export const simulateIngest = (data: { type: string; raw_text: string; household
 export const resetDatabase = () =>
   api.post("/admin/reset").then((r) => r.data);
 
+// ---------------------------------------------------------------------------
+// Health Module (H-1 to H-5)
+// ---------------------------------------------------------------------------
+
+export interface Medication {
+  id: number;
+  household_id: number;
+  member_id: number;
+  name: string;
+  dose_text: string;
+  times: string[];
+  owner_child_id: number | null;
+  active: boolean;
+  created_at?: string;
+}
+
+export interface DoseLog {
+  id: number;
+  medication_id: number;
+  scheduled_for: string;
+  status: "pending" | "taken" | "missed";
+  reminder_sent_at: string | null;
+  responded_at: string | null;
+  escalated_at: string | null;
+  medication_name?: string;
+  member_name?: string;
+}
+
+export interface Vital {
+  id: number;
+  household_id: number;
+  member_id: number;
+  kind: "bp" | "sugar" | "weight" | "spo2" | "pulse" | "temperature";
+  value_1: number;
+  value_2: number | null;
+  unit: string;
+  measured_at: string;
+  artifact_id: number | null;
+  quote: string;
+}
+
+export interface VitalThreshold {
+  id: number;
+  household_id: number;
+  member_id: number;
+  kind: "bp" | "sugar" | "weight" | "spo2" | "pulse" | "temperature";
+  field: "value_1" | "value_2";
+  op: "gt" | "lt";
+  limit: number;
+  note: string | null;
+  set_by_member_id: number | null;
+  active: boolean;
+}
+
+export interface HealthSummary {
+  todays_doses: (DoseLog & { medication_name?: string; member_name?: string })[];
+  recent_vitals: Vital[];
+  active_thresholds: VitalThreshold[];
+  active_medications: Medication[];
+}
+
+export const getHealthSummary = (householdId: number) =>
+  api.get<HealthSummary>(`/health/${householdId}/summary`).then((r) => r.data);
+
+export const createMedication = (data: Partial<Medication>) =>
+  api.post<Medication>("/health/medications", data).then((r) => r.data);
+
+export const updateMedication = (id: number, data: Partial<Medication>) =>
+  api.patch<Medication>(`/health/medications/${id}`, data).then((r) => r.data);
+
+export const createThreshold = (data: Partial<VitalThreshold>) =>
+  api.post<VitalThreshold>("/health/thresholds", data).then((r) => r.data);
+
+export const updateThreshold = (id: number, data: Partial<VitalThreshold>) =>
+  api.patch<VitalThreshold>(`/health/thresholds/${id}`, data).then((r) => r.data);
+
+export const simulateDoseNow = (medicationId: number) =>
+  api.post<{ status: string; reminder_sent: boolean }>("/admin/health/dose-now", { medication_id: medicationId }).then((r) => r.data);
+
+export const simulateSkipHealth = (minutes: number = 120) =>
+  api.post<{ status: string; escalated_doses_count: number }>("/admin/health/skip", { minutes }).then((r) => r.data);
+
+
