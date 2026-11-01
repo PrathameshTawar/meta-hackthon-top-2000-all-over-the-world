@@ -33,3 +33,7 @@ aiosqlite==0.22.1
 # Testing & Eval
 pytest==9.2.0
 pytest-asyncio==1.4.1
+
+# Image & PDF Processing
+pypdfium2>=5.14.0
+Pillow>=11.0.0

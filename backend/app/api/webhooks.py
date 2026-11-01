@@ -1177,14 +1177,20 @@ async def process_single_whatsapp_message(msg: dict):
         )
         return
 
-    # 3. Handle Voice / Image
+    # 3. Handle Voice / Image / PDF Document
     msg_type = msg.get("type", "")
     if msg_type in ("audio", "voice"):
         media_id = msg.get(msg_type, {}).get("id", "")
         artifact_type = ArtifactType.voice
+        file_url = f"whatsapp://{media_id}"
     elif msg_type == "image":
         media_id = msg.get("image", {}).get("id", "")
         artifact_type = ArtifactType.image
+        file_url = f"whatsapp://{media_id}"
+    elif msg_type == "document" and msg.get("document", {}).get("mime_type") == "application/pdf":
+        media_id = msg.get("document", {}).get("id", "")
+        artifact_type = ArtifactType.image
+        file_url = f"whatsapp-pdf://{media_id}"
     else:
         await _send_whatsapp_message(from_phone, "🙏 संदेश मिळाला!")
         return
@@ -1193,7 +1199,7 @@ async def process_single_whatsapp_message(msg: dict):
         artifact = Artifact(
             household_id=household_id,
             type=artifact_type,
-            file_url=f"whatsapp://{media_id}",
+            file_url=file_url,
         )
         db.add(artifact)
         await db.commit()

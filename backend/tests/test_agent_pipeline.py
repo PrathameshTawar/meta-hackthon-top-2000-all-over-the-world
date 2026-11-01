@@ -1132,3 +1132,50 @@ async def test_p1_12_readme_claims_heuristic_fallback_and_round_robin():
     async with AsyncSessionLocal() as db:
         t_created = await db.get(Task, assign_res_no_dedupe["task_id"])
         assert t_created.status == TaskStatus.needs_review
+
+
+# ---------------------------------------------------------------------------
+# P1-13 Tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_p1_13_smaller_crashes_and_edge_cases():
+    import io
+    import unittest.mock
+    from PIL import Image
+    from app.agent.nodes import node_classify, node_draft, _preprocess_image
+    from app.config import settings
+    from app.db.models import TaskCategory
+
+    # 1. Empty-string LLM output doesn't crash classify
+    with unittest.mock.patch("app.agent.nodes._call_llm", unittest.mock.AsyncMock(return_value="   ")):
+        with unittest.mock.patch.object(settings, "llm_api_key", "test-key"):
+            res = await node_classify({"raw_text": "Random text that does not match keywords", "household_id": 1})
+            assert "category" in res
+
+    # 2. The draft for a due date of 2026-11-10 contains "नोव्हेंबर" and not "2026-11-10"
+    draft_res = await node_draft({
+        "household_id": 1,
+        "category": TaskCategory.bill.value,
+        "extracted": {
+            "title": {"value": "Electricity Bill"},
+            "amount": {"value": "₹1,200"},
+            "due_date": {"value": "2026-11-10T00:00:00"},
+            "payee": {"value": "Tata Power"},
+        },
+    })
+    parent_reply = draft_res["parent_reply"]
+    assert "नोव्हेंबर" in parent_reply, f"Expected Marathi month name 'नोव्हेंबर' in parent reply, got: {parent_reply}"
+    assert "2026-11-10" not in parent_reply, f"ISO date 2026-11-10 must not appear in parent reply, got: {parent_reply}"
+
+    # 3. Image preprocessing returns bytes <= original size for a large test image generated in memory
+    import os
+    img = Image.frombytes("RGB", (2000, 1800), os.urandom(2000 * 1800 * 3))
+    raw_buf = io.BytesIO()
+    img.save(raw_buf, format="BMP")
+    large_bytes = raw_buf.getvalue()
+
+    processed_bytes = _preprocess_image(large_bytes)
+    assert len(processed_bytes) <= len(large_bytes), "Preprocessed image must be smaller than large uncompressed image"
+    processed_img = Image.open(io.BytesIO(processed_bytes))
+    assert max(processed_img.size) <= 1600, f"Long edge must be <= 1600 px, got {processed_img.size}"

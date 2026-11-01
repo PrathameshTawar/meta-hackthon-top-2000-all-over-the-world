@@ -14,6 +14,7 @@ import os
 import re
 import struct
 import subprocess
+import time
 import wave
 from datetime import datetime, timezone, timedelta
 from typing import Any, Optional
@@ -165,21 +166,56 @@ ENGLISH_MONTHS = {
     "jul": "07", "aug": "08", "sep": "09", "oct": "10", "nov": "11", "dec": "12"
 }
 
+MONTH_NAMES_MR = {v: k for k, v in MARATHI_MONTHS.items()}
+MONTH_NAMES_HI = {
+    "01": "जनवरी", "02": "फ़रवरी", "03": "मार्च", "04": "अप्रैल",
+    "05": "मई", "06": "जून", "07": "जुलाई", "08": "अगस्त",
+    "09": "सितंबर", "10": "अक्टूबर", "11": "नवंबर", "12": "दिसंबर"
+}
+
+CATEGORY_TITLES_MR = {
+    TaskCategory.bill.value: "वीज/गॅस बिल",
+    TaskCategory.loan_emi.value: "कर्जाचा हप्ता",
+    TaskCategory.pension.value: "पेन्शनचे काम",
+    TaskCategory.insurance.value: "विमा",
+    TaskCategory.govt_letter.value: "सरकारी नोटीस",
+    TaskCategory.appointment.value: "अपॉइंटमेंट",
+    TaskCategory.medical.value: "वैद्यकीय अपॉइंटमेंट",
+}
+
+CATEGORY_TITLES_HI = {
+    TaskCategory.bill.value: "बिजली/गैस बिल",
+    TaskCategory.loan_emi.value: "कर्ज की किस्त",
+    TaskCategory.pension.value: "पेंशन का काम",
+    TaskCategory.insurance.value: "बीमा",
+    TaskCategory.govt_letter.value: "सरकारी नोटिस",
+    TaskCategory.appointment.value: "अपॉइंटमेंट",
+    TaskCategory.medical.value: "चिकित्सा अपॉइंटमेंट",
+}
+
 
 # ---------------------------------------------------------------------------
 # Helpers & Client Initialization
 # ---------------------------------------------------------------------------
 
+_shared_openai_client: Optional[AsyncOpenAI] = None
+_shared_openai_key: Optional[str] = None
+
 def get_openai_client() -> Optional[AsyncOpenAI]:
-    """Initialize OpenAI-compatible client for Meta's Muse Spark Open or Baseten."""
+    """Initialize or return shared OpenAI-compatible client with max_retries=2."""
+    global _shared_openai_client, _shared_openai_key
     api_key = settings.get_api_key()
     if not api_key:
         return None
-    return AsyncOpenAI(
-        base_url=settings.llm_base_url,
-        api_key=api_key,
-        timeout=30.0,
-    )
+    if _shared_openai_client is None or _shared_openai_key != api_key:
+        _shared_openai_client = AsyncOpenAI(
+            base_url=settings.llm_base_url,
+            api_key=api_key,
+            timeout=30.0,
+            max_retries=2,
+        )
+        _shared_openai_key = api_key
+    return _shared_openai_client
 
 
 def get_current_ist_datetime() -> datetime:
@@ -373,6 +409,29 @@ async def _call_llm(prompt: str) -> Optional[str]:
         return None
 
 
+def _preprocess_image(file_bytes: bytes) -> bytes:
+    """Preprocess image: EXIF transpose, convert RGB, resize long edge <= 1600px, JPEG quality 85."""
+    try:
+        from PIL import Image, ImageOps
+        img = Image.open(io.BytesIO(file_bytes))
+        img = ImageOps.exif_transpose(img)
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+        w, h = img.size
+        long_edge = max(w, h)
+        if long_edge > 1600:
+            scale = 1600.0 / long_edge
+            new_w = int(w * scale)
+            new_h = int(h * scale)
+            img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+        out = io.BytesIO()
+        img.save(out, format="JPEG", quality=85)
+        return out.getvalue()
+    except Exception as e:
+        logger.warning(f"Image preprocessing failed, using original bytes: {e}")
+        return file_bytes
+
+
 def _to_16k_mono_wav(audio: bytes) -> bytes:
     """
     Convert any input audio format (e.g. WhatsApp OGG/Opus) to 16 kHz mono 16-bit PCM WAV using ffmpeg.
@@ -501,6 +560,27 @@ async def node_perceive(state: AgentState) -> dict:
                             )
                             if down.status_code == 200:
                                 file_bytes = down.content
+                elif file_url.startswith("whatsapp-pdf://"):
+                    GRAPH = f"https://graph.facebook.com/{settings.whatsapp_api_version}"
+                    headers = {"Authorization": f"Bearer {settings.whatsapp_token}"}
+                    async with httpx.AsyncClient(timeout=30) as http_c:
+                        meta = await http_c.get(f"{GRAPH}/{file_url.removeprefix('whatsapp-pdf://')}", headers=headers)
+                        meta.raise_for_status()
+                        media = await http_c.get(meta.json()["url"], headers=headers)
+                        media.raise_for_status()
+                        pdf_bytes = media.content
+                    try:
+                        import pypdfium2 as pdfium
+                        pdf = pdfium.PdfDocument(pdf_bytes)
+                        page = pdf[0]
+                        bitmap = page.render(scale=2.0)
+                        pil_img = bitmap.to_pil()
+                        buf = io.BytesIO()
+                        pil_img.save(buf, format="PNG")
+                        file_bytes = buf.getvalue()
+                    except Exception as pe:
+                        logger.warning(f"pypdfium2 PDF rendering failed: {pe}")
+                        file_bytes = pdf_bytes
                 elif file_url.startswith("whatsapp://"):
                     GRAPH = f"https://graph.facebook.com/{settings.whatsapp_api_version}"
                     headers = {"Authorization": f"Bearer {settings.whatsapp_token}"}
@@ -516,8 +596,23 @@ async def node_perceive(state: AgentState) -> dict:
                         if resp.status_code == 200:
                             file_bytes = resp.content
                 elif os.path.exists(file_url):
-                    with open(file_url, "rb") as f:
-                        file_bytes = f.read()
+                    if file_url.lower().endswith(".pdf"):
+                        try:
+                            import pypdfium2 as pdfium
+                            pdf = pdfium.PdfDocument(file_url)
+                            page = pdf[0]
+                            bitmap = page.render(scale=2.0)
+                            pil_img = bitmap.to_pil()
+                            buf = io.BytesIO()
+                            pil_img.save(buf, format="PNG")
+                            file_bytes = buf.getvalue()
+                        except Exception as pe:
+                            logger.warning(f"Local PDF rendering failed: {pe}")
+                            with open(file_url, "rb") as f:
+                                file_bytes = f.read()
+                    else:
+                        with open(file_url, "rb") as f:
+                            file_bytes = f.read()
             except Exception as e:
                 logger.error(f"Error reading file {file_url}: {e}")
 
@@ -570,6 +665,7 @@ async def node_perceive(state: AgentState) -> dict:
         elif artifact_type in ("image", "document"):
             if file_bytes and client:
                 try:
+                    file_bytes = _preprocess_image(file_bytes)
                     b64_img = base64.b64encode(file_bytes).decode("utf-8")
                     prompt = (
                         "Extract ALL text from this document image exactly as written. "
@@ -677,35 +773,38 @@ async def node_classify(state: AgentState) -> dict:
         else:
             category = None
 
-        # Try Muse Spark Open LLM classification if client is configured
-        prompt = (
-            f"Classify this text into exactly one category: "
-            f"bill, loan_emi, pension, govt_letter, insurance, appointment, medical, chit_chat.\n\n"
-            f"Rules:\n"
-            f"- If it is an electricity, water, gas, or maintenance bill, output 'bill'.\n"
-            f"- If it is a diagnostic test or prescription, output 'medical'.\n"
-            f"- Output ONLY the category name in lowercase.\n\n"
-            f"Text:\n{raw_text[:800]}\n\nCategory:"
-        )
-        llm_cat = await _call_llm(prompt)
-        if llm_cat:
-            cat_cleaned = llm_cat.strip().lower().split()[0]
+        if category is None:
+            # Try Muse Spark Open LLM classification if client is configured
+            prompt = (
+                f"Classify this text into exactly one category: "
+                f"bill, loan_emi, pension, govt_letter, insurance, appointment, medical, chit_chat.\n\n"
+                f"Rules:\n"
+                f"- If it is an electricity, water, gas, or maintenance bill, output 'bill'.\n"
+                f"- If it is a diagnostic test or prescription, output 'medical'.\n"
+                f"- Output ONLY the category name in lowercase.\n\n"
+                f"Text:\n{raw_text[:800]}\n\nCategory:"
+            )
+            t0 = time.perf_counter()
+            llm_cat = await _call_llm(prompt)
+            latency_ms = (time.perf_counter() - t0) * 1000.0
+            parts = (llm_cat or "").strip().lower().split()
+            cat_cleaned = parts[0].strip(".:'\"") if parts else ""
             try:
-                category = TaskCategory(cat_cleaned)
+                category = TaskCategory(cat_cleaned) if cat_cleaned else None
             except ValueError:
                 category = None
 
-        # Fallback to category keywords
-        if category is None:
-            for cat, keywords in CATEGORY_KEYWORDS.items():
-                if cat == TaskCategory.medical:
-                    continue
-                if any(kw in text_lower for kw in keywords):
-                    category = cat
-                    break
+            # Fallback to category keywords
+            if category is None:
+                for cat, keywords in CATEGORY_KEYWORDS.items():
+                    if cat == TaskCategory.medical:
+                        continue
+                    if any(kw in text_lower for kw in keywords):
+                        category = cat
+                        break
 
-        if category is None:
-            category = TaskCategory.unknown
+            if category is None:
+                category = TaskCategory.unknown
 
     await _log_event(
         task_id=None,
@@ -1222,16 +1321,51 @@ async def node_draft(state: AgentState) -> dict:
     due_date = (extracted.get("due_date") or {}).get("value") or ""
     payee = (extracted.get("payee") or {}).get("value") or ""
 
-    # Marathi confirmation reply to parent
-    parent_reply = (
-        f"नमस्कार. आम्ही तुमचे काम व्यवस्थित नोंदवून घेतले आहे: {title}. "
-        f"{'रक्कम: ' + amount + '. ' if amount else ''}"
-        f"{'देय तारीख: ' + due_date[:10] + '. ' if due_date else ''}"
-        f"काळजी करू नका, आम्ही वेळेवर सर्व पूर्ण करू. आम्ही तुमच्यासाठी हे करू."
-    )
+    # Household language preference
+    lang = "mr"
+    if state.get("household_id"):
+        async with AsyncSessionLocal() as db:
+            hh = await db.get(Household, state["household_id"])
+            if hh and hh.primary_language:
+                lang = hh.primary_language
 
-    if state.get("medical_context"):
-        parent_reply += " (टीप: मला वैद्यकीय अहवाल किंवा गोळ्यांचा अर्थ सांगता येणार नाही. कृपया हे तुमच्या डॉक्टरांशी शेअर करा.)"
+    category_val = state.get("category", "")
+    if lang == "hi":
+        parent_title = CATEGORY_TITLES_HI.get(category_val, title)
+    else:
+        parent_title = CATEGORY_TITLES_MR.get(category_val, title)
+
+    # Format due date nicely (e.g. 10 नोव्हेंबर)
+    formatted_date = ""
+    if due_date and len(due_date) >= 10:
+        try:
+            d_obj = datetime.fromisoformat(due_date[:10])
+            m_str = f"{d_obj.month:02d}"
+            if lang == "hi":
+                formatted_date = f"{d_obj.day} {MONTH_NAMES_HI.get(m_str, m_str)}"
+            else:
+                formatted_date = f"{d_obj.day} {MONTH_NAMES_MR.get(m_str, m_str)}"
+        except Exception:
+            formatted_date = due_date[:10]
+
+    if lang == "hi":
+        parent_reply = (
+            f"नमस्ते। हमने आपका काम दर्ज कर लिया है: {parent_title}। "
+            f"{'राशि: ' + amount + '। ' if amount else ''}"
+            f"{'देय तारीख: ' + formatted_date + '। ' if formatted_date else ''}"
+            f"चिंता न करें, हम समय पर सब पूरा करेंगे। हम आपके लिए यह करेंगे।"
+        )
+        if state.get("medical_context"):
+            parent_reply += " (नोट: मैं मेडिकल रिपोर्ट या दवाइयों का अर्थ नहीं बता सकता। कृपया इसे अपने डॉक्टर से साझा करें।)"
+    else:
+        parent_reply = (
+            f"नमस्कार. आम्ही तुमचे काम व्यवस्थित नोंदवून घेतले आहे: {parent_title}. "
+            f"{'रक्कम: ' + amount + '. ' if amount else ''}"
+            f"{'देय तारीख: ' + formatted_date + '. ' if formatted_date else ''}"
+            f"काळजी करू नका, आम्ही वेळेवर सर्व पूर्ण करू. आम्ही तुमच्यासाठी हे करू."
+        )
+        if state.get("medical_context"):
+            parent_reply += " (टीप: मला वैद्यकीय अहवाल किंवा गोळ्यांचा अर्थ सांगता येणार नाही. कृपया हे तुमच्या डॉक्टरांशी शेअर करा.)"
 
     # Sibling notification formatted for instant action & smartwatch readability
     watch_header = f"📌 {title}"
