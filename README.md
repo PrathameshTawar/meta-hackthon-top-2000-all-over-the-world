@@ -32,7 +32,7 @@ India's sole earners are running two households from one phone, while ageing par
 | Model | Provider / Endpoint | Role in Saath |
 | :--- | :--- | :--- |
 | **Muse Voice Transcribe (`muse-voice-transcribe-1.0`)** | Baseten / Meta Model API (`POST /v1/asr/transcribe`) | Dedicated ASR transcribing 16 kHz mono WAV voice notes in spoken Marathi and Hindi with zero audio degradation. |
-| **Muse Spark Open (`meta-models/muse-spark-open-1026`)** | Baseten / Meta Model API (`POST /v1/chat/completions`) | Vision OCR on bill photos, semantic classification, entity extraction with verbatim quoted evidence, status inquiry intent classification, and drafted Marathi parent replies. |
+| **Muse Spark Open (`meta-models/muse-spark-open-1026`)** | Baseten / Meta Model API (`POST /v1/chat/completions`) | Vision OCR on bill photos, semantic classification, entity extraction with verbatim quoted evidence, and status inquiry intent classification. Parent replies use reviewed, fixed Marathi templates filled with verified fields to prevent hallucination. |
 
 *API endpoints and model names are configurable via `.env` (`LLM_BASE_URL`, `LLM_API_KEY`, `MUSE_SPARK_MODEL`, `MUSE_VOICE_MODEL`).*
 

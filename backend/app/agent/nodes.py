@@ -839,9 +839,11 @@ Return ONLY valid JSON in this exact structure:
 Text:
 {raw_text[:2000]}
 """
+    mode = "state_override"
     if state.get("extracted"):
         extracted = state["extracted"]
     elif settings.get_api_key():
+        mode = "muse_spark"
         llm_resp = await _call_llm(prompt)
         if llm_resp:
             try:
@@ -872,6 +874,7 @@ Text:
             }
     else:
         # Fall back to deterministic heuristic extraction
+        mode = "keyword_fallback"
         extracted = _heuristic_extract(raw_text)
 
     # Compute confidence: fraction of grounded key fields with both value and verbatim quote
@@ -891,9 +894,10 @@ Text:
         action="extracted",
         reason=f"Extracted {filled}/{len(grounded_fields)} fields with supporting quotes",
         payload={
-            "artifact_id": state["artifact_id"],
+            "artifact_id": state.get("artifact_id"),
             "fields": list(extracted.keys()),
             "confidence": confidence,
+            "mode": mode,
         },
     )
     return {"extracted": extracted, "confidence": confidence}
@@ -1105,7 +1109,18 @@ async def node_assign(state: AgentState) -> dict:
                 assignee = child
                 break
         if not assignee and children:
-            assignee = children[0]
+            open_counts = {}
+            for child in children:
+                res = await db.execute(
+                    select(Task).where(
+                        Task.household_id == household_id,
+                        Task.assignee_id == child.id,
+                        Task.status != TaskStatus.done,
+                    )
+                )
+                open_counts[child.id] = len(res.scalars().all())
+            sorted_children = sorted(children, key=lambda c: (open_counts[c.id], c.id))
+            assignee = sorted_children[0]
 
         assignee_id = assignee.id if assignee else None
 
@@ -1134,7 +1149,7 @@ async def node_assign(state: AgentState) -> dict:
                 amount=(extracted.get("amount") or {}).get("value"),
                 due_date=due_date,
                 payee=(extracted.get("payee") or {}).get("value"),
-                status=TaskStatus.confirmed if state.get("verify_passed") else TaskStatus.needs_review,
+                status=TaskStatus.confirmed if (state.get("verify_passed") and state.get("dedupe_key") is not None) else TaskStatus.needs_review,
                 assignee_id=assignee_id,
                 confidence=state.get("confidence", 0.9),
                 dedupe_key=state.get("dedupe_key"),

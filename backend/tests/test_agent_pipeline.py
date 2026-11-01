@@ -1068,3 +1068,67 @@ async def test_p1_11_robust_dedup_keys():
     })
     assert d_no_due["dedupe_key"] is None
     assert d_no_due["existing_task_id"] is None
+
+
+# ---------------------------------------------------------------------------
+# P1-12 Tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_p1_12_readme_claims_heuristic_fallback_and_round_robin():
+    import os
+    import random
+    import unittest.mock
+    from app.agent.nodes import node_extract, node_assign
+    from app.config import settings
+    from app.db.models import Household, Member, MemberRole, Task, TaskCategory, TaskStatus
+    from app.db.session import AsyncSessionLocal
+    from sqlalchemy import select
+
+    # 1. No-key extraction returns heuristic fields
+    raw_text = "महावितरण वीज बिल रक्कम ₹1,450 देय तारीख 2026-11-28"
+    with unittest.mock.patch.object(settings, "llm_api_key", ""):
+        with unittest.mock.patch.object(settings, "meta_api_key", ""):
+            with unittest.mock.patch.dict(os.environ, {"BASETEN_API_KEY": ""}):
+                res = await node_extract({"artifact_id": 1, "raw_text": raw_text, "household_id": 1})
+                assert res["extracted"]["amount"]["value"] == "₹1,450"
+                assert res["extracted"]["payee"]["value"] == "Mahavitaran (MSEDCL)"
+
+    # 2. Round-robin assigns to child with fewest open tasks
+    h_id = random.randint(10000, 99999)
+    async with AsyncSessionLocal() as db:
+        hh = Household(id=h_id, name="RoundRobin Family", primary_language="mr")
+        db.add(hh)
+        c_a = Member(id=h_id * 10 + 1, household_id=h_id, name="Child A", role=MemberRole.child, categories_owned=[])
+        c_b = Member(id=h_id * 10 + 2, household_id=h_id, name="Child B", role=MemberRole.child, categories_owned=[])
+        db.add_all([c_a, c_b])
+        # Give Child A 2 open tasks
+        t1 = Task(household_id=h_id, assignee_id=c_a.id, title="Open 1", status=TaskStatus.new)
+        t2 = Task(household_id=h_id, assignee_id=c_a.id, title="Open 2", status=TaskStatus.confirmed)
+        db.add_all([t1, t2])
+        await db.commit()
+
+    state = {
+        "household_id": h_id,
+        "artifact_id": 1,
+        "raw_text": raw_text,
+        "category": TaskCategory.bill.value,
+        "extracted": {
+            "title": {"value": "New Power Bill"},
+            "amount": {"value": "₹1,450"},
+            "due_date": {"value": "2026-11-28T00:00:00"},
+            "payee": {"value": "Mahavitaran (MSEDCL)"},
+        },
+        "verify_passed": True,
+        "dedupe_key": "some_key",
+    }
+    assign_res = await node_assign(state)
+    assert assign_res["assignee_id"] == c_b.id, f"Expected Child B ({c_b.id}) with 0 open tasks, got {assign_res['assignee_id']}"
+
+    # 3. If dedupe_key is None -> status is needs_review
+    state_no_dedupe = dict(state)
+    state_no_dedupe["dedupe_key"] = None
+    assign_res_no_dedupe = await node_assign(state_no_dedupe)
+    async with AsyncSessionLocal() as db:
+        t_created = await db.get(Task, assign_res_no_dedupe["task_id"])
+        assert t_created.status == TaskStatus.needs_review
