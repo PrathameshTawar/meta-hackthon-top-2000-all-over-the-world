@@ -1,0 +1,200 @@
+[
+  {
+    "id": "vital_01",
+    "description": "Marathi BP with Devanagari digits and slash",
+    "text": "आज बीपी १५०/९५ आहे",
+    "is_vital": true,
+    "expected_readings": [
+      {
+        "kind": "bp",
+        "value_1": 150.0,
+        "value_2": 95.0
+      }
+    ],
+    "threshold_test": {
+      "kind": "bp",
+      "field": "value_1",
+      "op": "gt",
+      "limit": 140.0,
+      "should_alert": true
+    }
+  },
+  {
+    "id": "vital_02",
+    "description": "English BP with 'by' separator and Latin digits",
+    "text": "BP 150 by 95",
+    "is_vital": true,
+    "expected_readings": [
+      {
+        "kind": "bp",
+        "value_1": 150.0,
+        "value_2": 95.0
+      }
+    ],
+    "threshold_test": {
+      "kind": "bp",
+      "field": "value_1",
+      "op": "gt",
+      "limit": 140.0,
+      "should_alert": true
+    }
+  },
+  {
+    "id": "vital_03",
+    "description": "Marathi BP with 'वर' separator",
+    "text": "रक्तदाब १२० वर ८० आला आहे",
+    "is_vital": true,
+    "expected_readings": [
+      {
+        "kind": "bp",
+        "value_1": 120.0,
+        "value_2": 80.0
+      }
+    ],
+    "threshold_test": {
+      "kind": "bp",
+      "field": "value_1",
+      "op": "gt",
+      "limit": 140.0,
+      "should_alert": false
+    }
+  },
+  {
+    "id": "vital_04",
+    "description": "English Sugar fasting reading",
+    "text": "sugar 180 fasting",
+    "is_vital": true,
+    "expected_readings": [
+      {
+        "kind": "sugar",
+        "value_1": 180.0,
+        "value_2": null
+      }
+    ],
+    "threshold_test": {
+      "kind": "sugar",
+      "field": "value_1",
+      "op": "gt",
+      "limit": 140.0,
+      "should_alert": true
+    }
+  },
+  {
+    "id": "vital_05",
+    "description": "Hindi BP with Latin digits and slash",
+    "text": "आज ब्लड प्रेशर 130/85 है",
+    "is_vital": true,
+    "expected_readings": [
+      {
+        "kind": "bp",
+        "value_1": 130.0,
+        "value_2": 85.0
+      }
+    ],
+    "threshold_test": {
+      "kind": "bp",
+      "field": "value_1",
+      "op": "gt",
+      "limit": 140.0,
+      "should_alert": false
+    }
+  },
+  {
+    "id": "vital_06",
+    "description": "English Weight reading with kg",
+    "text": "weight 72 kg",
+    "is_vital": true,
+    "expected_readings": [
+      {
+        "kind": "weight",
+        "value_1": 72.0,
+        "value_2": null
+      }
+    ],
+    "threshold_test": null
+  },
+  {
+    "id": "vital_07",
+    "description": "Marathi SpO2 reading with Devanagari digits",
+    "text": "ऑक्सिजन ९६ आहे",
+    "is_vital": true,
+    "expected_readings": [
+      {
+        "kind": "spo2",
+        "value_1": 96.0,
+        "value_2": null
+      }
+    ],
+    "threshold_test": null
+  },
+  {
+    "id": "vital_08",
+    "description": "Two readings in one message (BP and Pulse)",
+    "text": "बीपी १४०/९० आणि नाडी ७८",
+    "is_vital": true,
+    "expected_readings": [
+      {
+        "kind": "bp",
+        "value_1": 140.0,
+        "value_2": 90.0
+      },
+      {
+        "kind": "pulse",
+        "value_1": 78.0,
+        "value_2": null
+      }
+    ],
+    "threshold_test": null
+  },
+  {
+    "id": "vital_09",
+    "description": "Implausible BP value (BP 15/9) must be dropped",
+    "text": "बीपी १५/९ आले",
+    "is_vital": true,
+    "expected_readings": [],
+    "threshold_test": null
+  },
+  {
+    "id": "vital_10",
+    "description": "Vital phrasing with no number",
+    "text": "आज बीपी तपासले",
+    "is_vital": true,
+    "expected_readings": [],
+    "threshold_test": null
+  },
+  {
+    "id": "non_vital_01",
+    "description": "Diagnostic Lab report with fasting blood sugar",
+    "text": "Dr Lal Pathlabs Clinical Report: fasting blood sugar 180 mg/dl",
+    "is_vital": false,
+    "expected_readings": []
+  },
+  {
+    "id": "non_vital_02",
+    "description": "Prescription with 500 mg dosage",
+    "text": "Doctor prescription: Metformin 500 mg twice daily",
+    "is_vital": false,
+    "expected_readings": []
+  },
+  {
+    "id": "non_vital_03",
+    "description": "Bill containing ₹150/95 style numbers",
+    "text": "Mahavitaran electricity bill ₹150/95 due on 10th Nov",
+    "is_vital": false,
+    "expected_readings": []
+  },
+  {
+    "id": "non_vital_04",
+    "description": "Voice status question",
+    "text": "काय बाकी आहे?",
+    "is_vital": false,
+    "expected_readings": []
+  },
+  {
+    "id": "non_vital_05",
+    "description": "Chit-chat greeting",
+    "text": "नमस्कार, कसे आहात?",
+    "is_vital": false,
+    "expected_readings": []
+  }
+]
