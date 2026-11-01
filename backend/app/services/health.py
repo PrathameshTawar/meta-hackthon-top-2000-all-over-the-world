@@ -269,3 +269,4 @@ async def record_dose_taken(dose_id: int, member: Member) -> Tuple[DoseTakenResu
             return DoseTakenResult.late_ok, dose, "✅ नोंद केली. धन्यवाद! 🙏"
 
         return DoseTakenResult.ok, dose, "✅ नोंद केली. धन्यवाद! 🙏"
+
