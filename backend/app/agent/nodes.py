@@ -1753,6 +1753,33 @@ async def node_draft(state: AgentState) -> dict:
         except Exception:
             formatted_date = due_date[:10]
 
+    # H-4: Custom appointment logistics polish
+    if category_val in (TaskCategory.appointment.value, "appointment"):
+        parent_name = "Aai"
+        if state.get("household_id"):
+            async with AsyncSessionLocal() as db:
+                parents_res = await db.execute(
+                    select(Member).where(
+                        Member.household_id == state["household_id"],
+                        Member.role == MemberRole.parent,
+                    )
+                )
+                parents = parents_res.scalars().all()
+                if parents:
+                    parent_name = parents[0].name
+
+        date_display = due_date[:10] if due_date else "upcoming date"
+        sibling_notification = f"🏥 {payee or 'Doctor'} appointment for {parent_name} on {date_display}. Who can take them? Tap Claim."
+        if lang == "hi":
+            parent_reply = f"अपॉइंटमेंट दर्ज की गई: {formatted_date}. कौन साथ जाएगा हम जल्द बताएंगे। 🙏"
+        else:
+            parent_reply = f"अपॉइंटमेंट नोंदवली: {formatted_date}. कोण सोबत येणार ते लवकरच कळवू. 🙏"
+        return {
+            "parent_reply": parent_reply,
+            "sibling_notification": sibling_notification,
+            "call_script": None,
+        }
+
     if lang == "hi":
         parent_reply = (
             f"नमस्ते। हमने आपका काम दर्ज कर लिया है: {parent_title}। "

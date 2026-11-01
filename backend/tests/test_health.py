@@ -430,3 +430,89 @@ async def test_h3_vitals_by_voice_note_or_text(monkeypatch):
     for forbidden in ["high", "low", "normal", "जास्त", "कमी"]:
         assert forbidden not in v_res5.get("parent_reply", "").lower()
 
+
+# ---------------------------------------------------------------------------
+# H-4 Tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_h4_appointment_logistics_polish(monkeypatch):
+    from app.agent.nodes import node_draft
+    from app.services.tasks import claim_task, ClaimResult
+    from app.db.models import Task, TaskCategory, TaskStatus, Member, MemberRole, Household
+    from app.db.session import AsyncSessionLocal
+    from datetime import datetime
+
+    # Setup household with Aai (parent) and Rohan (child)
+    async with AsyncSessionLocal() as db:
+        h = Household(name="Appointment Family", primary_language="mr")
+        db.add(h)
+        await db.commit()
+        await db.refresh(h)
+
+        aai = Member(household_id=h.id, name="Aai", role=MemberRole.parent, phone=f"+919{uuid.uuid4().int % 1000000000:09d}")
+        rohan = Member(household_id=h.id, name="Rohan", role=MemberRole.child, phone=f"+919{uuid.uuid4().int % 1000000000:09d}")
+        db.add_all([aai, rohan])
+        await db.commit()
+        await db.refresh(aai)
+        await db.refresh(rohan)
+
+        task = Task(
+            household_id=h.id,
+            category=TaskCategory.appointment,
+            title="Dr. Joshi Clinic",
+            payee="Dr. Joshi",
+            due_date=datetime(2026, 11, 10),
+            status=TaskStatus.confirmed,
+        )
+        db.add(task)
+        await db.commit()
+        await db.refresh(task)
+
+        h_id = h.id
+        task_id = task.id
+        aai_id = aai.id
+
+    # 1. Test appointment draft
+    state = {
+        "household_id": h_id,
+        "category": TaskCategory.appointment.value,
+        "extracted": {
+            "title": {"value": "Dr. Joshi Clinic"},
+            "payee": {"value": "Dr. Joshi"},
+            "due_date": {"value": "2026-11-10T00:00:00"},
+        },
+    }
+    draft_res = await node_draft(state)
+    assert "Who can take them" in draft_res["sibling_notification"]
+    assert "🏥 Dr. Joshi appointment for Aai on 2026-11-10" in draft_res["sibling_notification"]
+    assert "अपॉइंटमेंट नोंदवली: 10 नोव्हेंबर" in draft_res["parent_reply"]
+    assert "कोण सोबत येणार ते लवकरच कळवू" in draft_res["parent_reply"]
+
+    # 2. Test claiming appointment notifies parent once
+    notifications = []
+    async def mock_notify(member, text, **kwargs):
+        notifications.append((member.id, text))
+        return True
+    monkeypatch.setattr("app.services.tasks.notify", mock_notify)
+
+    async with AsyncSessionLocal() as db:
+        rohan_member = await db.get(Member, rohan.id)
+        res, claimed_task = await claim_task(task_id, rohan_member)
+        assert res == ClaimResult.ok
+        assert claimed_task.status == TaskStatus.claimed
+
+    # Verify parent notified
+    assert len(notifications) == 1
+    assert notifications[0][0] == aai_id
+    assert "Rohan तुमच्यासोबत 10 नोव्हेंबर ला येणार आहे" in notifications[0][1]
+
+    # Second claim attempt (idempotent, no second notification)
+    notifications.clear()
+    async with AsyncSessionLocal() as db:
+        rohan_member = await db.get(Member, rohan.id)
+        res2, _ = await claim_task(task_id, rohan_member)
+        assert res2 == ClaimResult.already_yours
+    assert len(notifications) == 0
+
+

@@ -7,11 +7,43 @@ import enum
 import logging
 from typing import Optional
 
-from app.db.models import Task, TaskStatus, Member, Event
+from app.db.models import Task, TaskCategory, TaskStatus, Member, MemberRole, Event
 from app.db.session import AsyncSessionLocal
 from app.api.webhooks import notify_parents_task_done
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
+
+
+async def notify(*args, **kwargs):
+    """Forwarder for webhook notify to allow monkeypatching in tests."""
+    from app.api.webhooks import notify as _notify
+    return await _notify(*args, **kwargs)
+
+
+async def notify_parents_appointment_claimed(task: Task, child_name: str):
+    """Notify parents that a child has claimed the appointment logistics."""
+    from app.agent.nodes import MONTH_NAMES_MR
+
+    marathi_date = ""
+    if task.due_date:
+        d_obj = task.due_date
+        m_str = f"{d_obj.month:02d}"
+        marathi_date = f"{d_obj.day} {MONTH_NAMES_MR.get(m_str, m_str)}"
+
+    msg = f"{child_name} तुमच्यासोबत {marathi_date} ला येणार आहे. 🙏" if marathi_date else f"{child_name} तुमच्यासोबत येणार आहे. 🙏"
+
+    async with AsyncSessionLocal() as db:
+        parents_res = await db.execute(
+            select(Member).where(
+                Member.household_id == task.household_id,
+                Member.role == MemberRole.parent,
+            )
+        )
+        parents = parents_res.scalars().all()
+
+        for parent in parents:
+            await notify(member=parent, text=msg)
 
 
 class ClaimResult(enum.Enum):
@@ -66,6 +98,13 @@ async def claim_task(task_id: int, member: Member) -> tuple[ClaimResult, Optiona
         ))
         await db.commit()
         await db.refresh(task)
+
+        if task.category in (TaskCategory.appointment, "appointment"):
+            try:
+                await notify_parents_appointment_claimed(task, member.name)
+            except Exception as exc:
+                logger.warning(f"Failed to notify parents for appointment claim: {exc}")
+
         return ClaimResult.ok, task
 
 
