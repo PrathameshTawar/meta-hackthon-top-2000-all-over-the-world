@@ -16,9 +16,12 @@ node_modules/
 .vercel/
 out/
 
-# DB / misc
+# DB / storage
 *.db
+*.db-shm
+*.db-wal
 *.sqlite3
+data/
 pgdata/
 
 # OS
