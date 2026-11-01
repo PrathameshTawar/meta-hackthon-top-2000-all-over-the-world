@@ -1058,67 +1058,38 @@ async def process_single_whatsapp_message(msg: dict):
         # Claim
         if btn_id.startswith(("claim:", "claim_")):
             task_id = int(btn_id.replace("claim:", "").replace("claim_", ""))
-            async with AsyncSessionLocal() as db:
-                task = await db.get(Task, task_id)
-                if task and task.household_id == household_id:
-                    task.status = TaskStatus.claimed
-                    task.assignee_id = member.id
-                    task.updated_at = datetime.utcnow()
-                    db.add(Event(
-                        household_id=task.household_id,
-                        task_id=task.id,
-                        actor=f"member:{member.name}",
-                        action="claimed",
-                        reason=f"Claimed via WhatsApp by {member.name}",
-                        payload={"member_id": member.id, "phone": from_phone},
-                    ))
-                    await db.commit()
-                    await _send_whatsapp_message(
-                        from_phone,
-                        f"✅ Task #{task.id} ('{task.title}') has been claimed by you on the family board.\n"
-                        f"When finished, tap Mark Done.",
-                        buttons=[{"id": f"done:{task.id}", "title": "Mark Done"}],
-                    )
+            from app.services.tasks import claim_task, ClaimResult
+            claim_res, task = await claim_task(task_id, member)
+            if claim_res == ClaimResult.ok:
+                await _send_whatsapp_message(
+                    from_phone,
+                    f"✅ Task #{task.id} ('{task.title}') has been claimed by you on the family board.\n"
+                    f"When finished, tap Mark Done.",
+                    buttons=[{"id": f"done:{task.id}", "title": "Mark Done"}],
+                )
+            elif claim_res == ClaimResult.taken:
+                await _send_whatsapp_message(from_phone, "⚠️ हे काम आधीच दुसऱ्या भावंडाने स्वीकारले आहे.")
+            elif claim_res == ClaimResult.already_yours:
+                await _send_whatsapp_message(from_phone, "हे काम आधीच तुम्ही स्वीकारले आहे.")
+            elif claim_res == ClaimResult.done:
+                await _send_whatsapp_message(from_phone, "हे काम आधीच पूर्ण झाले आहे.")
             return
 
         # Done
         elif btn_id.startswith(("done:", "done_")):
             task_id = int(btn_id.replace("done:", "").replace("done_", ""))
-            async with AsyncSessionLocal() as db:
-                task = await db.get(Task, task_id)
-                if task and task.household_id == household_id:
-                    task.status = TaskStatus.done
-                    task.updated_at = datetime.utcnow()
-
-                    if task.recurrence == "monthly" and task.due_date:
-                        next_due = task.due_date + timedelta(days=30)
-                        next_task = Task(
-                            household_id=task.household_id,
-                            category=task.category,
-                            title=task.title,
-                            amount=task.amount,
-                            due_date=next_due,
-                            payee=task.payee,
-                            status=TaskStatus.confirmed,
-                            assignee_id=task.assignee_id,
-                            recurrence="monthly",
-                        )
-                        db.add(next_task)
-
-                    db.add(Event(
-                        household_id=task.household_id,
-                        task_id=task.id,
-                        actor=f"member:{member.name}",
-                        action="completed",
-                        reason=f"Marked completed via WhatsApp by {member.name}",
-                        payload={"member_id": member.id, "phone": from_phone},
-                    ))
-                    await db.commit()
-                    await _send_whatsapp_message(
-                        from_phone,
-                        f"✔️ '{task.title}' काम पूर्ण झाल्याचे नोंदवले आहे. पालकांना कळवले आहे. 🙏",
-                    )
-                    await notify_parents_task_done(task, completed_by_name=member.name)
+            from app.services.tasks import complete_task, DoneResult
+            done_res, task = await complete_task(task_id, member.name, member.household_id)
+            if done_res == DoneResult.ok:
+                await _send_whatsapp_message(
+                    from_phone,
+                    f"✔️ '{task.title}' काम पूर्ण झाल्याचे नोंदवले आहे. पालकांना कळवले आहे. 🙏",
+                )
+            elif done_res == DoneResult.already_done:
+                await _send_whatsapp_message(
+                    from_phone,
+                    "✔️ हे काम आधीच पूर्ण झाले आहे. पालकांना आधीच कळवले आहे. 🙏",
+                )
             return
 
         # Confirmation: confirm_yes

@@ -645,3 +645,153 @@ async def test_p0_5_serialize_agent_runs_per_household(monkeypatch):
         )
         tasks = tasks_res.scalars().all()
         assert len(tasks) == 1, f"Expected 1 task but found {len(tasks)}"
+
+
+# ---------------------------------------------------------------------------
+# P0-6 Tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_p0_6_idempotent_claim_and_complete(monkeypatch):
+    import uuid, random
+    from datetime import datetime, timedelta
+    from sqlalchemy import select
+    from app.db.models import Household, Member, MemberRole, Task, TaskCategory, TaskStatus
+    from app.db.session import AsyncSessionLocal
+    from app.services.tasks import claim_task, complete_task, ClaimResult, DoneResult
+    import app.services.tasks as s_module
+
+    notified = []
+    async def mock_notify_parents(task, completed_by_name=""):
+        notified.append((task.id, completed_by_name))
+    monkeypatch.setattr(s_module, "notify_parents_task_done", mock_notify_parents)
+
+    test_h_id = random.randint(10000, 99999)
+    async with AsyncSessionLocal() as db:
+        h = Household(id=test_h_id, name="Idempotent Test Family", primary_language="mr")
+        db.add(h)
+        await db.flush()
+
+        sib_a = Member(
+            household_id=test_h_id,
+            name="Aarav",
+            role=MemberRole.child,
+            telegram_id=f"sib_a_{uuid.uuid4().hex[:6]}",
+            phone=f"+9191{uuid.uuid4().hex[:8]}",
+        )
+        sib_b = Member(
+            household_id=test_h_id,
+            name="Ananya",
+            role=MemberRole.child,
+            telegram_id=f"sib_b_{uuid.uuid4().hex[:6]}",
+            phone=f"+9192{uuid.uuid4().hex[:8]}",
+        )
+        db.add_all([sib_a, sib_b])
+        await db.flush()
+
+        task_claim = Task(
+            household_id=test_h_id,
+            category=TaskCategory.bill,
+            title="Water Bill",
+            amount="₹450",
+            status=TaskStatus.confirmed,
+        )
+        task_emi = Task(
+            household_id=test_h_id,
+            category=TaskCategory.loan_emi,
+            title="Home Loan EMI",
+            amount="₹25,000",
+            due_date=datetime(2026, 11, 15),
+            status=TaskStatus.confirmed,
+            recurrence="monthly",
+        )
+        db.add_all([task_claim, task_emi])
+        await db.commit()
+        t_claim_id = task_claim.id
+        t_emi_id = task_emi.id
+
+    # 1. Sibling A claims task_claim -> ok
+    res1, t1 = await claim_task(t_claim_id, sib_a)
+    assert res1 == ClaimResult.ok
+    assert t1.assignee_id == sib_a.id
+    assert t1.status == TaskStatus.claimed
+
+    # 2. Sibling B attempts to claim the same task -> taken, assignee remains sibling A
+    res2, t2 = await claim_task(t_claim_id, sib_b)
+    assert res2 == ClaimResult.taken
+    assert t2.assignee_id == sib_a.id
+
+    # 3. Sibling A claims again -> already_yours
+    res3, t3 = await claim_task(t_claim_id, sib_a)
+    assert res3 == ClaimResult.already_yours
+
+    # 4. Complete recurring monthly EMI task first time -> ok, creates 1 recurring task, notifies parents once
+    res_done1, td1 = await complete_task(t_emi_id, sib_a.name, test_h_id)
+    assert res_done1 == DoneResult.ok
+    assert td1.status == TaskStatus.done
+    assert len(notified) == 1
+
+    # 5. Complete same task second time -> already_done, no second recurring task, no second notification
+    res_done2, td2 = await complete_task(t_emi_id, sib_b.name, test_h_id)
+    assert res_done2 == DoneResult.already_done
+    assert len(notified) == 1
+
+    # Check recurring task in DB
+    async with AsyncSessionLocal() as db:
+        recurring_res = await db.execute(
+            select(Task).where(
+                Task.household_id == test_h_id,
+                Task.title == "Home Loan EMI",
+            )
+        )
+        all_emis = recurring_res.scalars().all()
+        # Original (done) + exactly 1 next month recurring task = 2
+        assert len(all_emis) == 2
+
+
+@pytest.mark.asyncio
+async def test_p0_6_web_patch_recurrence(monkeypatch):
+    import random
+    from datetime import datetime
+    from sqlalchemy import select
+    from app.db.models import Household, Task, TaskCategory, TaskStatus
+    from app.db.session import AsyncSessionLocal
+    from app.api.tasks import update_task, TaskUpdate
+    import app.services.tasks as s_module
+
+    notified = []
+    async def mock_notify_parents(task, completed_by_name=""):
+        notified.append((task.id, completed_by_name))
+    monkeypatch.setattr(s_module, "notify_parents_task_done", mock_notify_parents)
+
+    test_h_id = random.randint(10000, 99999)
+    async with AsyncSessionLocal() as db:
+        h = Household(id=test_h_id, name="Web Patch Family", primary_language="mr")
+        db.add(h)
+        task = Task(
+            household_id=test_h_id,
+            category=TaskCategory.loan_emi,
+            title="Education Loan EMI",
+            amount="₹10,000",
+            due_date=datetime(2026, 11, 25),
+            status=TaskStatus.confirmed,
+            recurrence="monthly",
+        )
+        db.add(task)
+        await db.commit()
+        task_id = task.id
+
+    async with AsyncSessionLocal() as db:
+        update_dto = TaskUpdate(status=TaskStatus.done)
+        res = await update_task(task_id, update_dto, db)
+        assert res.status == TaskStatus.done
+
+    async with AsyncSessionLocal() as db:
+        recurring_res = await db.execute(
+            select(Task).where(
+                Task.household_id == test_h_id,
+                Task.title == "Education Loan EMI",
+            )
+        )
+        all_emis = recurring_res.scalars().all()
+        assert len(all_emis) == 2
