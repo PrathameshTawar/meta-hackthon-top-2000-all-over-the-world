@@ -1212,3 +1212,25 @@ async def test_p3_16_protect_web_task_api():
             headers={"X-Admin-Token": settings.admin_secret},
         )
         assert res3.status_code == 404, f"Expected 404 on wrong household, got {res3.status_code}"
+
+
+# ---------------------------------------------------------------------------
+# P3-17 Tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_p3_17_sqlite_wal_and_busy_timeout(tmp_path):
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from app.db.session import _apply_sqlite_pragmas
+
+    test_db = tmp_path / "pragma_test.db"
+    test_engine = create_async_engine(f"sqlite+aiosqlite:///{test_db}")
+    _apply_sqlite_pragmas(test_engine)
+
+    async with test_engine.connect() as conn:
+        journal_mode = (await conn.exec_driver_sql("PRAGMA journal_mode")).scalar()
+        busy_timeout = (await conn.exec_driver_sql("PRAGMA busy_timeout")).scalar()
+
+    await test_engine.dispose()
+    assert str(journal_mode).lower() == "wal"
+    assert busy_timeout == 5000
