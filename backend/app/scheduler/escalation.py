@@ -109,6 +109,17 @@ async def run_escalation(simulated_days_ahead: int = 0) -> list[int]:
     return escalated_ids
 
 
+async def run_health_schedule():
+    """Runs health medication scheduling, due reminders, and adherence escalation."""
+    from app.services.health import ensure_todays_doses, send_due_reminders, escalate_missed_doses
+    try:
+        await ensure_todays_doses()
+        await send_due_reminders()
+        await escalate_missed_doses()
+    except Exception as exc:
+        logger.error(f"Health scheduler execution error: {exc}", exc_info=True)
+
+
 # ---------------------------------------------------------------------------
 # APScheduler setup
 # ---------------------------------------------------------------------------
@@ -118,8 +129,9 @@ def start_scheduler():
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
         scheduler = AsyncIOScheduler()
         scheduler.add_job(run_escalation, "interval", hours=1, id="escalation")
+        scheduler.add_job(run_health_schedule, "interval", minutes=5, id="health_schedule")
         scheduler.start()
-        logger.info("Escalation scheduler started (hourly).")
+        logger.info("Escalation and health scheduler started (hourly tasks, 5-min health).")
         return scheduler
     except Exception as exc:
         logger.warning(f"Could not start APScheduler: {exc}")

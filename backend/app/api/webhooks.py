@@ -54,6 +54,9 @@ TEMPLATE_LANGUAGES = {
     "saath_task_escalation": "en_US",
     "saath_task_done": "mr",
     "saath_please_check": "en_US",
+    "saath_med_reminder": "mr",
+    "saath_dose_missed": "en_US",
+    "saath_vital_alert": "en_US",
 }
 
 
@@ -642,6 +645,26 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
                 await _answer_callback_query(cb_id, "त्रुटी आली.")
                 return {"ok": False, "error": str(exc)}
 
+        # Dose Taken Button: dose_taken:{dose_id}
+        elif cb_data.startswith("dose_taken:"):
+            try:
+                dose_id = int(cb_data.split(":")[-1])
+                from app.services.health import record_dose_taken
+                async with AsyncSessionLocal() as db:
+                    res = await db.execute(select(Member).where(Member.telegram_id == from_user))
+                    member = res.scalars().first()
+                if not member:
+                    await _answer_callback_query(cb_id, "नोंदणी सापडली नाही.")
+                    return {"ok": False, "error": "Member not registered"}
+                res_code, _, reply_text = await record_dose_taken(dose_id, member)
+                await _answer_callback_query(cb_id, reply_text)
+                await _send_telegram_message(chat_id, reply_text)
+                return {"ok": True, "result": res_code.value}
+            except Exception as exc:
+                logger.error(f"Error handling dose_taken callback: {exc}", exc_info=True)
+                await _answer_callback_query(cb_id, "त्रुटी आली.")
+                return {"ok": False, "error": str(exc)}
+
         # Claim Button: claim:{task_id}
         elif cb_data.startswith(("claim:", "claim_")):
             try:
@@ -1074,6 +1097,14 @@ async def process_single_whatsapp_message(msg: dict):
                     from_phone,
                     "✔️ हे काम आधीच पूर्ण झाले आहे. पालकांना आधीच कळवले आहे. 🙏",
                 )
+            return
+
+        # Dose Taken
+        elif btn_id.startswith("dose_taken:"):
+            dose_id = int(btn_id.split(":")[-1])
+            from app.services.health import record_dose_taken
+            _, _, reply_text = await record_dose_taken(dose_id, member)
+            await _send_whatsapp_message(from_phone, reply_text)
             return
 
         # Confirmation: confirm_yes

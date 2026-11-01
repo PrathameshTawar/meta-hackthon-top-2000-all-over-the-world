@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Request, Depends, Header
 from pydantic import BaseModel
 from typing import Optional, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.config import settings
 from app.scheduler.escalation import run_escalation
@@ -46,6 +46,14 @@ class SimulateIngestRequest(BaseModel):
     raw_text: str
     file_url: Optional[str] = None
     chat_id: Optional[str] = "demo_chat"
+
+
+class DoseNowRequest(BaseModel):
+    medication_id: int
+
+
+class SkipHealthRequest(BaseModel):
+    minutes: int = 120
 
 
 @router.post("/escalate/simulate")
@@ -121,3 +129,39 @@ async def simulate_ingest(
         "message": "Artifact created and agent execution queued in background.",
         "artifact_id": art_id,
     }
+
+
+@router.post("/health/dose-now")
+async def admin_health_dose_now(
+    req: DoseNowRequest,
+    _: None = Depends(verify_admin_auth),
+):
+    from app.services.health import send_due_reminders
+    from app.agent.nodes import get_current_ist_datetime
+    from app.db.models import DoseLog, DoseStatus, Medication
+    now = get_current_ist_datetime()
+    async with AsyncSessionLocal() as db:
+        med = await db.get(Medication, req.medication_id)
+        if not med:
+            raise HTTPException(status_code=404, detail="Medication not found")
+        dose = DoseLog(
+            medication_id=req.medication_id,
+            scheduled_for=now,
+            status=DoseStatus.pending,
+        )
+        db.add(dose)
+        await db.commit()
+    sent = await send_due_reminders(now=now)
+    return {"status": "ok", "reminder_sent": sent > 0}
+
+
+@router.post("/health/skip")
+async def admin_health_skip(
+    req: SkipHealthRequest = SkipHealthRequest(),
+    _: None = Depends(verify_admin_auth),
+):
+    from app.services.health import escalate_missed_doses
+    from app.agent.nodes import get_current_ist_datetime
+    now = get_current_ist_datetime() + timedelta(minutes=req.minutes)
+    escalated = await escalate_missed_doses(now=now)
+    return {"status": "ok", "escalated_doses_count": escalated}

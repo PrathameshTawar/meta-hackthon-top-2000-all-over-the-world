@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     # Escalation & Background Jobs
     escalation_days_before: int = 3
     run_scheduler: bool = True
+    dose_escalate_after_minutes: int = 120
 
     class Config:
         env_file = (".env", "../.env")
