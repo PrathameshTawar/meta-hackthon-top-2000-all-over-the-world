@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -8,8 +8,9 @@ from datetime import datetime
 
 from app.db.session import get_db
 from app.db.models import Task, TaskStatus, Evidence
+from app.api.admin import verify_admin_auth
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_admin_auth)])
 
 
 # ---------------------------------------------------------------------------
@@ -46,7 +47,7 @@ class TaskOut(BaseModel):
 
 
 class TaskUpdate(BaseModel):
-    status: Optional[str] = None
+    status: Optional[TaskStatus] = None
     assignee_id: Optional[int] = None
 
 
@@ -79,16 +80,31 @@ async def get_task(task_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.patch("/{task_id}", response_model=TaskOut)
-async def update_task(task_id: int, update: TaskUpdate, db: AsyncSession = Depends(get_db)):
+async def update_task(
+    task_id: int,
+    update: TaskUpdate,
+    db: AsyncSession = Depends(get_db),
+    household_id: Optional[int] = None,
+    x_household_id: Optional[int] = Header(None, alias="X-Household-Id"),
+):
     task = await db.get(Task, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+
+    expected_hid = None
+    if household_id is not None:
+        expected_hid = household_id
+    elif isinstance(x_household_id, (int, str)) and str(x_household_id).isdigit():
+        expected_hid = int(x_household_id)
+
+    if expected_hid is not None and task.household_id != expected_hid:
+        raise HTTPException(status_code=404, detail="Task not found in this household")
 
     if update.assignee_id is not None:
         task.assignee_id = update.assignee_id
 
     if update.status:
-        new_status = TaskStatus(update.status)
+        new_status = update.status
         if new_status == TaskStatus.done and task.status != TaskStatus.done:
             if update.assignee_id is not None:
                 await db.commit()

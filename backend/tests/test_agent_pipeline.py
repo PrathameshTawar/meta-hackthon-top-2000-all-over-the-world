@@ -1179,3 +1179,36 @@ async def test_p1_13_smaller_crashes_and_edge_cases():
     assert len(processed_bytes) <= len(large_bytes), "Preprocessed image must be smaller than large uncompressed image"
     processed_img = Image.open(io.BytesIO(processed_bytes))
     assert max(processed_img.size) <= 1600, f"Long edge must be <= 1600 px, got {processed_img.size}"
+
+
+# ---------------------------------------------------------------------------
+# P3-16 Tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_p3_16_protect_web_task_api():
+    from httpx import AsyncClient, ASGITransport
+    from app.main import app
+    from app.config import settings
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. Missing token -> 401
+        res1 = await client.get("/tasks/1")
+        assert res1.status_code == 401, f"Expected 401 on missing admin token, got {res1.status_code}"
+
+        # 2. Invalid status -> 422
+        res2 = await client.patch(
+            "/tasks/1",
+            json={"status": "invalid_status_xyz"},
+            headers={"X-Admin-Token": settings.admin_secret},
+        )
+        assert res2.status_code == 422, f"Expected 422 on invalid status, got {res2.status_code}"
+
+        # 3. Wrong household -> 404
+        res3 = await client.patch(
+            "/tasks/1?household_id=999999",
+            json={"status": "done"},
+            headers={"X-Admin-Token": settings.admin_secret},
+        )
+        assert res3.status_code == 404, f"Expected 404 on wrong household, got {res3.status_code}"

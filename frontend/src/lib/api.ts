@@ -1,8 +1,14 @@
 import axios from "axios";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const ADMIN_TOKEN = process.env.NEXT_PUBLIC_ADMIN_SECRET ?? "saath_admin_secret_demo";
 
-export const api = axios.create({ baseURL: BASE });
+export const api = axios.create({
+  baseURL: BASE,
+  headers: {
+    "X-Admin-Token": ADMIN_TOKEN,
+  },
+});
 
 // ---------------------------------------------------------------------------
 // Types (mirroring backend Pydantic schemas)
@@ -52,8 +58,17 @@ export interface Member {
 export const getTasks = (householdId: number) =>
   api.get<Task[]>(`/tasks/${householdId}`).then((r) => r.data);
 
-export const updateTask = (taskId: number, patch: Partial<Pick<Task, "status" | "assignee_id">>) =>
-  api.patch<Task>(`/tasks/${taskId}`, patch).then((r) => r.data);
+export const updateTask = (
+  taskId: number,
+  patch: Partial<Pick<Task, "status" | "assignee_id">>,
+  householdId?: number
+) =>
+  api
+    .patch<Task>(`/tasks/${taskId}`, patch, {
+      params: householdId ? { household_id: householdId } : undefined,
+      headers: householdId ? { "X-Household-Id": String(householdId) } : undefined,
+    })
+    .then((r) => r.data);
 
 export const getMembers = (householdId: number) =>
   api.get<Member[]>(`/members/${householdId}`).then((r) => r.data);
