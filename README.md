@@ -89,6 +89,8 @@ Parent Voice / Photo (WhatsApp / Telegram)
         │
         ├──► Medical Diagnostic Report? ──► [ Guardrail ] ──► Empathetic Refusal ──► END
         │
+        ├──► Health Vitals (BP, Sugar, Weight, SpO2, Pulse, Temp) ──► [ Vital ] ──► Threshold Alert ──► END
+        │
         └──► Valid Obligation ──► [ Extract ] (mode="muse_spark" or mode="keyword_fallback")
                                       │
                                       ▼
@@ -207,9 +209,23 @@ python -m tests.run_eval --set all
 
 ---
 
+## Health Module (आरोग्य मॉड्यूल)
+
+The Health module extends Saath to assist adult children with their parents' daily medicine schedules and vital health measurements, without ever giving medical advice or interpreting clinical data.
+
+### Core Product Rules (Strictly Enforced)
+
+1. **Saath Never Interprets Health Data:** Zero words like "high", "low", "normal", "dangerous", diagnoses, or medicine advice in any WhatsApp reply, UI string, or model prompt output.
+2. **Alerts Come Only from Family-Set Thresholds:** The only judgment is a code comparison against an explicit threshold a child configured (e.g. *"Doctor said notify us if systolic BP is above 150"*). Alert messages state: *"beyond the limit your family set"*, never *"high blood pressure"*.
+3. **Medications Entered by Children, Never Extracted:** Prescriptions remain strictly blocked by the medical safety guardrail. The agent never infers or extracts drug names or dosages from document photos.
+4. **Diagnostic Reports & Prescriptions Still Blocked:** Lab reports and clinical documents continue directly to the empathetic guardrail refusal.
+5. **Times in India Standard Time (IST):** All schedules, doses, and logs are evaluated and recorded in IST (`Asia/Kolkata`).
+
+---
+
 ## Meta WhatsApp Message Templates Setup
 
-To reproduce the WhatsApp notifications in Meta Business Manager / WhatsApp Manager, create and submit these 4 message templates:
+To reproduce the WhatsApp notifications in Meta Business Manager / WhatsApp Manager, create and submit these 7 message templates:
 
 | Template Name | Category | Language | Exact Body Wording & Parameters | Buttons / Payloads |
 | :--- | :--- | :--- | :--- | :--- |
@@ -217,6 +233,9 @@ To reproduce the WhatsApp notifications in Meta Business Manager / WhatsApp Mana
 | `saath_task_escalation` | UTILITY | English (US) (`en_US`) | `Urgent family reminder: {{1}} is due in {{2}} and is still unclaimed. Please claim and settle.` | Quick Reply: `Claim Task` (payload: `claim:<task_id>`) |
 | `saath_task_done` | UTILITY | Marathi (`mr`) | `नमस्कार! आनंदाची बातमी: तुमचे हे काम पूर्ण झाले आहे: {{1}}. पूर्ण करणारा: {{2}}. काळजी करू नका, सर्व वेळेवर झाले आहे!` | None (Informational loop closure) |
 | `saath_please_check` | UTILITY | English (US) (`en_US`) | `Please check extracted obligation details: {{1}}. Is this accurate?` | Button 0: `Correct (होय)` (`confirm_yes:<artifact_id>`), Button 1: `Wrong (नाही)` (`confirm_no:<artifact_id>`) |
+| `saath_med_reminder` | UTILITY | Marathi (`mr`) | `नमस्कार {{1}}, {{2}} घेण्याची वेळ झाली आहे. घेतल्यावर खालील बटण दाबा.` | Quick Reply: `घेतली ✅` (payload: `dose_taken:<id>`) |
+| `saath_dose_missed` | UTILITY | English (US) (`en_US`) | `{{1}} has not confirmed taking {{2}} (scheduled {{3}}). Please check in with them.` | None |
+| `saath_vital_alert` | UTILITY | English (US) (`en_US`) | `{{1}} reported {{2}} at {{3}}, beyond the limit your family set ({{4}}). Please check in.` | None |
 
 > **Key Template Implementation Notes:**
 > 1. **No Line Breaks:** Meta rejects template parameter values with newline characters (`\r` or `\n`). The backend sanitizes all parameters before transmission via `_clean_template_param`.

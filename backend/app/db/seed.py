@@ -9,6 +9,7 @@ from app.db.session import AsyncSessionLocal, init_db
 from app.db.models import (
     Household, Member, MemberRole, Artifact, ArtifactType,
     Task, TaskCategory, TaskStatus, Evidence, Event,
+    Medication, Vital, VitalThreshold, VitalKind, VitalOp, DoseLog, DoseStatus,
 )
 from sqlalchemy import select, delete
 
@@ -123,8 +124,15 @@ async def seed_data():
             raw_text="DR LAL PATHLABS CLINICAL REPORT. Patient: Dilip Kulkarni (67M). Fasting Glucose: 168 mg/dL. HbA1c: 7.8%. Logistics: Follow-up consultation at Sahyadri Hospital on 2026-11-08.",
             received_at=now - timedelta(days=4),
         )
+        art_bp = Artifact(
+            household_id=household.id,
+            type=ArtifactType.voice,
+            file_url="telegram://voice_baba_bp.ogg",
+            raw_text="आज सकाळी बीपी तपासले, ते १५२/९४ आले आहे.",
+            received_at=now - timedelta(days=2),
+        )
 
-        db.add_all([art_bill, art_emi, art_ins, art_app, art_pension, art_medical])
+        db.add_all([art_bill, art_emi, art_ins, art_app, art_pension, art_medical, art_bp])
         await db.flush()
 
         # 4. Tasks
@@ -303,6 +311,86 @@ async def seed_data():
             ),
         ]
         db.add_all(events)
+
+        # 7. Health Module Seeds (H-6)
+        # Medication for Aai (08:00 and 20:00), owner child Rohan
+        med_aai = Medication(
+            household_id=household.id,
+            member_id=aai.id,
+            name="सकाळची गोळी (Amlodipine)",
+            dose_text="1 tablet",
+            times=["08:00", "20:00"],
+            owner_child_id=rohan.id,
+            active=True,
+        )
+        db.add(med_aai)
+        await db.flush()
+
+        # Today's dose logs for demo
+        today_naive = now.replace(tzinfo=None)
+        dose_morning = DoseLog(
+            medication_id=med_aai.id,
+            scheduled_for=datetime(today_naive.year, today_naive.month, today_naive.day, 8, 0),
+            status=DoseStatus.taken,
+            reminder_sent_at=today_naive - timedelta(hours=2),
+            responded_at=today_naive - timedelta(hours=1, minutes=45),
+        )
+        dose_evening = DoseLog(
+            medication_id=med_aai.id,
+            scheduled_for=datetime(today_naive.year, today_naive.month, today_naive.day, 20, 0),
+            status=DoseStatus.pending,
+        )
+        db.add_all([dose_morning, dose_evening])
+
+        # Family Threshold for Baba: BP value_1 gt 150
+        thresh_baba = VitalThreshold(
+            household_id=household.id,
+            member_id=baba.id,
+            kind=VitalKind.bp,
+            field="value_1",
+            op=VitalOp.gt,
+            limit=150.0,
+            note="Doctor advised",
+            set_by_member_id=rohan.id,
+            active=True,
+        )
+        db.add(thresh_baba)
+
+        # Three past BP readings for Baba over the last week
+        v1 = Vital(
+            household_id=household.id,
+            member_id=baba.id,
+            kind=VitalKind.bp,
+            value_1=138.0,
+            value_2=86.0,
+            unit="mmHg",
+            measured_at=today_naive - timedelta(days=6),
+            artifact_id=None,
+            quote="138/86",
+        )
+        v2 = Vital(
+            household_id=household.id,
+            member_id=baba.id,
+            kind=VitalKind.bp,
+            value_1=142.0,
+            value_2=88.0,
+            unit="mmHg",
+            measured_at=today_naive - timedelta(days=4),
+            artifact_id=None,
+            quote="142/88",
+        )
+        v3 = Vital(
+            household_id=household.id,
+            member_id=baba.id,
+            kind=VitalKind.bp,
+            value_1=152.0,
+            value_2=94.0,
+            unit="mmHg",
+            measured_at=today_naive - timedelta(days=2),
+            artifact_id=art_bp.id,
+            quote="१५२/९४",
+        )
+        db.add_all([v1, v2, v3])
 
         await db.commit()
         print("Saath demo data seeded successfully for Household 1!")
