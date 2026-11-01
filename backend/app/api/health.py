@@ -345,3 +345,4 @@ async def update_threshold(thresh_id: int, req: ThresholdUpdate, db: AsyncSessio
     await db.commit()
     await db.refresh(thresh)
     return thresh
+
