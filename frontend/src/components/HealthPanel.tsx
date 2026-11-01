@@ -729,3 +729,4 @@ function BPLineChart({ vitals, threshold }: { vitals: Vital[]; threshold?: Vital
     </svg>
   );
 }
+
