@@ -789,14 +789,14 @@ Fields:
 - amount: formatted with currency (e.g., ₹1,840)
 - due_date: ISO 8601 date (YYYY-MM-DD)
 - payee: organisation / utility / bank name
-- title: concise task title
+- title: concise task title (summary, does not need a quote)
 
 Return ONLY valid JSON in this exact structure:
 {{
   "amount":   {{"value": "...", "quote": "..."}},
   "due_date": {{"value": "...", "quote": "..."}},
   "payee":    {{"value": "...", "quote": "..."}},
-  "title":    {{"value": "...", "quote": "..."}}
+  "title":    {{"value": "..."}}
 }}
 
 Text:
@@ -811,12 +811,15 @@ Text:
                 match = re.search(r"\{.*\}", llm_resp, re.DOTALL)
                 if match:
                     parsed = json.loads(match.group())
-                    for k in ["amount", "due_date", "payee", "title"]:
+                    for k in ["amount", "due_date", "payee"]:
                         if k in parsed and isinstance(parsed[k], dict):
                             q = parsed[k].get("quote")
                             if q and norm(q) not in norm(raw_text):
                                 parsed[k]["quote"] = None
                                 parsed[k]["value"] = None
+                    if "title" in parsed:
+                        if not isinstance(parsed["title"], dict):
+                            parsed["title"] = {"value": str(parsed["title"])}
                     extracted = parsed
             except Exception:
                 extracted = state.get("extracted") or None
@@ -834,20 +837,22 @@ Text:
         # Fall back to deterministic heuristic extraction
         extracted = _heuristic_extract(raw_text)
 
-    # Compute confidence: fraction of key fields with both value and verbatim quote
-    fields = ["amount", "due_date", "payee", "title"]
+    # Compute confidence: fraction of grounded key fields with both value and verbatim quote
+    grounded_fields = ["amount", "due_date", "payee"]
+    if "consumer_number" in extracted and extracted["consumer_number"].get("value"):
+        grounded_fields.append("consumer_number")
     filled = sum(
-        1 for f in fields
+        1 for f in grounded_fields
         if extracted.get(f, {}).get("value") and extracted.get(f, {}).get("quote")
     )
-    confidence = filled / len(fields)
+    confidence = filled / len(grounded_fields) if grounded_fields else 0.0
 
     await _log_event(
         task_id=None,
         household_id=state.get("household_id"),
         actor="agent:extract",
         action="extracted",
-        reason=f"Extracted {filled}/4 fields with supporting quotes",
+        reason=f"Extracted {filled}/{len(grounded_fields)} fields with supporting quotes",
         payload={
             "artifact_id": state["artifact_id"],
             "fields": list(extracted.keys()),
@@ -910,6 +915,8 @@ async def node_verify(state: AgentState) -> dict:
     now_ist = get_current_ist_datetime().date()
 
     for field, data in extracted.items():
+        if field == "title":
+            continue
         if not isinstance(data, dict):
             continue
         value = data.get("value")

@@ -974,3 +974,36 @@ async def test_p1_9_devanagari_and_normalized_quotes():
     }
     res_ws = await node_verify({"raw_text": raw_text_ws, "extracted": extracted_ws, "confidence": 1.0})
     assert res_ws["verify_passed"] is True, f"Expected pass, got failures: {res_ws.get('verify_failures')}"
+
+
+# ---------------------------------------------------------------------------
+# P1-10 Tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_p1_10_exclude_generated_title_from_grounding():
+    import json
+    import unittest.mock
+    from app.agent.nodes import node_extract, node_verify
+    from app.config import settings
+
+    raw_text = "MSEDCL electricity bill amount ₹1,450 due date 2026-11-28"
+    mock_llm_json = json.dumps({
+        "amount": {"value": "₹1,450", "quote": "₹1,450"},
+        "due_date": {"value": "2026-11-28T00:00:00", "quote": "2026-11-28"},
+        "payee": {"value": "MSEDCL", "quote": "MSEDCL"},
+        "title": {"value": "Monthly Power Bill Payment for Residence", "quote": "Not in text at all"},
+    })
+
+    with unittest.mock.patch("app.agent.nodes._call_llm", unittest.mock.AsyncMock(return_value=mock_llm_json)):
+        with unittest.mock.patch.object(settings, "llm_api_key", "test-real-api-key"):
+            extract_res = await node_extract({"artifact_id": 1, "raw_text": raw_text})
+
+            # Title value should be preserved despite quote not being in raw_text
+            assert extract_res["extracted"]["title"]["value"] == "Monthly Power Bill Payment for Residence"
+            # Confidence should be 1.0 (3/3 grounded fields amount, due_date, payee)
+            assert extract_res["confidence"] == 1.0
+
+            verify_res = await node_verify({"raw_text": raw_text, "extracted": extract_res["extracted"], "confidence": extract_res["confidence"]})
+            assert verify_res["verify_passed"] is True
+            assert len(verify_res["verify_failures"]) == 0
