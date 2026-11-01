@@ -64,8 +64,18 @@ Saath is evaluated against two distinct offline test suites: an immutable **40-i
 | **Medical Hospital Bills & Invoices** | 5 | Guardrail false-refusal rate (must track as bill) | 0.0% | 0.0% (5 of 5 tracked) | 0.0% (5 of 5 tracked) | ✅ Passed (Zero False Refusal) |
 | **Pipeline Latency** | 26 | Median: 17.6 ms · p95: 22.8 ms (isolated test DB) | < 5000 ms | 17.6 ms | — | ✅ Passed |
 
+### 3. Vitals Benchmark Set (15 Items — Marathi, Hindi & English)
+> *Note on Vitals Evaluation:* The 15-item vitals evaluation slice tests readings across Marathi, Hindi, and English, covering Devanagari numerals (`१५०/९५`), separators (`/`, `by`, `वर`), multi-reading messages (BP + Pulse), implausible values (dropped by safety bounds), and strict rejection of non-vitals (diagnostic lab tests, prescriptions, bills with slash numbers, status queries, and chit-chat).
+
+| Test Slice | Items | Metric Evaluated | Target | Measured Result | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Vitals Readings Extraction** | 10 (9 readings) | Reading-level accuracy (kind, value_1, value_2) | 90%+ | 100.0% (9 of 9) | ✅ Passed |
+| **Family-Set Threshold Alerts** | 5 | Threshold alert decision accuracy (code comparison) | 100% | 100.0% (5 of 5) | ✅ Passed |
+| **Non-Vital Rejection** | 5 | Rejection recall (must NOT log as vitals) | 100% | 100.0% (5 of 5) | ✅ Passed |
+| **Pipeline Latency** | 15 | Median: 14.6 ms · p95: 30.5 ms | < 5000 ms | 14.6 ms | ✅ Passed |
+
 > **Evaluation Transparency & Reproducibility:**  
-> Running `python -m tests.run_eval --set regression` or `python -m tests.run_eval --set holdout` (or `--set all`) runs against an isolated SQLite test database with zero side effects. Live model responses are automatically cached in `backend/tests/eval_set/cache/` so evaluators and judges can reproduce benchmark numbers without needing an active API key.
+> Running `python -m tests.run_eval --set regression` or `python -m tests.run_eval --set holdout` or `python -m tests.run_eval --set vitals` (or `--set all`) runs against an isolated SQLite test database with zero side effects. Live model responses are automatically cached in `backend/tests/eval_set/cache/` so evaluators and judges can reproduce benchmark numbers without needing an active API key.
 
 ---
 
@@ -220,6 +230,15 @@ The Health module extends Saath to assist adult children with their parents' dai
 3. **Medications Entered by Children, Never Extracted:** Prescriptions remain strictly blocked by the medical safety guardrail. The agent never infers or extracts drug names or dosages from document photos.
 4. **Diagnostic Reports & Prescriptions Still Blocked:** Lab reports and clinical documents continue directly to the empathetic guardrail refusal.
 5. **Times in India Standard Time (IST):** All schedules, doses, and logs are evaluated and recorded in IST (`Asia/Kolkata`).
+
+### Vitals Evaluation Benchmark (15 Typed Items)
+
+| Metric | Measured Result | Target | Status |
+| :--- | :--- | :--- | :--- |
+| **Reading-Level Accuracy (kind + values)** | 100.0% (9 of 9) | 90%+ | ✅ PASSED |
+| **Threshold Decision Accuracy** | 100.0% (5 of 5) | 100% | ✅ PASSED |
+| **Non-Vital Correctly Not Logged** | 100.0% (5 of 5) | 100% | ✅ PASSED |
+| **Pipeline Latency** | Median: 14.6 ms, p95: 30.5 ms | < 5000 ms | ✅ PASSED |
 
 ---
 
