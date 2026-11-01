@@ -1186,11 +1186,12 @@ async def test_p1_13_smaller_crashes_and_edge_cases():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_p3_16_protect_web_task_api():
+async def test_p3_16_protect_web_task_api(monkeypatch):
     from httpx import AsyncClient, ASGITransport
     from app.main import app
     from app.config import settings
 
+    monkeypatch.setattr(settings, "admin_secret", "saath_admin_secret_demo")
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # 1. Missing token -> 401
@@ -1261,3 +1262,28 @@ async def test_p3_18_scheduler_process_control(monkeypatch):
     async with lifespan(app):
         pass
     mock_start.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# P3-19 Tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_p3_19_empty_admin_secret_returns_503(monkeypatch):
+    from httpx import AsyncClient, ASGITransport
+    from app.main import app
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "admin_secret", "")
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Task route returns 503
+        res1 = await client.get("/tasks/1", headers={"X-Admin-Token": "some-token"})
+        assert res1.status_code == 503, f"Expected 503 when admin_secret is empty, got {res1.status_code}"
+        assert "ADMIN_SECRET not configured" in res1.json().get("detail", "")
+
+        # Admin route returns 503
+        res2 = await client.post("/admin/escalate/simulate", headers={"X-Admin-Token": "some-token"})
+        assert res2.status_code == 503, f"Expected 503 when admin_secret is empty, got {res2.status_code}"
+        assert "ADMIN_SECRET not configured" in res2.json().get("detail", "")

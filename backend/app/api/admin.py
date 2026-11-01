@@ -19,17 +19,21 @@ async def verify_admin_auth(
     authorization: Optional[str] = Header(None),
 ):
     """Secure admin endpoints against unauthorized resets or wipes during judging."""
+    if not settings.admin_secret:
+        raise HTTPException(
+            status_code=503,
+            detail="ADMIN_SECRET not configured",
+        )
+
     token = x_admin_token
     if not token and authorization and authorization.startswith("Bearer "):
         token = authorization.split("Bearer ")[-1].strip()
 
-    # If secret is set and does not match, reject
-    if settings.admin_secret:
-        if token != settings.admin_secret:
-            raise HTTPException(
-                status_code=401,
-                detail="Unauthorized: Valid X-Admin-Token or Bearer token required for admin endpoints.",
-            )
+    if token != settings.admin_secret:
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized: Valid X-Admin-Token or Bearer token required for admin endpoints.",
+        )
 
 
 class SimulateEscalationRequest(BaseModel):
@@ -60,10 +64,15 @@ async def simulate_escalation(
 
 
 @router.post("/reset")
-async def trigger_reset(_: None = Depends(verify_admin_auth)):
-    """Reset database to initial demo state."""
+@router.post("/reset-db")
+async def admin_reset_db(
+    request: Request = None,
+    _: None = Depends(verify_admin_auth),
+):
+    """Wipe database and re-seed with demo household (Bhosale family)."""
     await reset_db()
-    return {"status": "ok", "message": "Database wiped and re-seeded with demo data."}
+    await seed_data()
+    return {"status": "ok", "message": "Database reset and re-seeded with demo data."}
 
 
 @router.post("/seed")
@@ -79,36 +88,36 @@ async def simulate_ingest(
     background_tasks: BackgroundTasks,
     _: None = Depends(verify_admin_auth),
 ):
-    """
-    Directly feed a voice transcript or document OCR into the LangGraph agent
-    to demonstrate live perception, extraction, verification, deduplication, and assignment.
-    """
+    """Simulate an incoming artifact (voice or image) hitting the agent."""
+    if req.type == "voice":
+        art_type = ArtifactType.voice
+    elif req.type == "image":
+        art_type = ArtifactType.image
+    else:
+        art_type = ArtifactType.text
+
     async with AsyncSessionLocal() as db:
         artifact = Artifact(
             household_id=req.household_id,
-            type=ArtifactType(req.type),
-            file_url=req.file_url or f"demo://{req.type}_{datetime_timestamp()}",
+            source="simulate",
+            type=art_type,
+            file_url=req.file_url,
             raw_text=req.raw_text,
         )
         db.add(artifact)
         await db.commit()
         await db.refresh(artifact)
-        artifact_id = artifact.id
+        art_id = artifact.id
 
-    await _run_agent(
-        artifact_id=artifact_id,
+    background_tasks.add_task(
+        _run_agent,
+        artifact_id=art_id,
         household_id=req.household_id,
-        artifact_type=req.type,
-        file_url=artifact.file_url,
-        chat_id=req.chat_id or "demo_chat",
+        chat_id=req.chat_id,
     )
 
     return {
         "status": "ok",
-        "artifact_id": artifact_id,
-        "message": "Processed through LangGraph agent successfully.",
+        "message": "Artifact created and agent execution queued in background.",
+        "artifact_id": art_id,
     }
-
-
-def datetime_timestamp() -> str:
-    return datetime.utcnow().strftime("%Y%m%d_%H%M%S")

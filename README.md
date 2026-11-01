@@ -131,6 +131,7 @@ Every field extracted by the agent must be accompanied by the **exact verbatim s
 ```bash
 git clone https://github.com/PrathameshTawar/meta-hackthon-top-2000-all-over-the-world.git saath
 cd saath
+cp .env.example .env  # Configure ADMIN_SECRET and credentials before running
 docker compose up --build
 ```
 - Backend: `http://localhost:8000` (`/healthz`, `/docs`)
@@ -148,6 +149,7 @@ python -m venv .venv
 source .venv/bin/activate
 
 pip install -r requirements.txt
+cp ../.env.example ../.env  # Set ADMIN_SECRET (default empty blocks admin & task APIs with 503)
 python -m app.db.reset
 uvicorn app.main:app --reload --port 8000
 ```
