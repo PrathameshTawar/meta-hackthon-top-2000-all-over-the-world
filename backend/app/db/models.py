@@ -53,6 +53,26 @@ class TaskStatus(str, enum.Enum):
     escalated = "escalated"
 
 
+class DoseStatus(str, enum.Enum):
+    pending = "pending"
+    taken = "taken"
+    missed = "missed"
+
+
+class VitalKind(str, enum.Enum):
+    bp = "bp"
+    sugar = "sugar"
+    weight = "weight"
+    spo2 = "spo2"
+    pulse = "pulse"
+    temperature = "temperature"
+
+
+class VitalOp(str, enum.Enum):
+    gt = "gt"
+    lt = "lt"
+
+
 # ---------------------------------------------------------------------------
 # Tables
 # ---------------------------------------------------------------------------
@@ -169,3 +189,81 @@ class ProcessedMessage(Base):
     channel: Mapped[str] = mapped_column(String(32), default="whatsapp")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+
+# ---------------------------------------------------------------------------
+# Health Module Tables
+# ---------------------------------------------------------------------------
+
+class Medication(Base):
+    __tablename__ = "medications"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    household_id: Mapped[int] = mapped_column(ForeignKey("households.id"))
+    member_id: Mapped[int] = mapped_column(ForeignKey("members.id"))
+    name: Mapped[str] = mapped_column(String(120))
+    dose_text: Mapped[str] = mapped_column(String(120))
+    times: Mapped[list] = mapped_column(JSON, default=list)  # list of "HH:MM"
+    owner_child_id: Mapped[Optional[int]] = mapped_column(ForeignKey("members.id"), nullable=True)
+    active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    household: Mapped["Household"] = relationship()
+    member: Mapped["Member"] = relationship(foreign_keys=[member_id])
+    owner_child: Mapped[Optional["Member"]] = relationship(foreign_keys=[owner_child_id])
+    doses: Mapped[List["DoseLog"]] = relationship(back_populates="medication", cascade="all, delete-orphan")
+
+
+class DoseLog(Base):
+    __tablename__ = "dose_logs"
+    __table_args__ = (
+        UniqueConstraint("medication_id", "scheduled_for"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    medication_id: Mapped[int] = mapped_column(ForeignKey("medications.id"))
+    scheduled_for: Mapped[datetime] = mapped_column(DateTime)  # naive IST
+    status: Mapped[DoseStatus] = mapped_column(SAEnum(DoseStatus), default=DoseStatus.pending)
+    reminder_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    responded_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    escalated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    medication: Mapped["Medication"] = relationship(back_populates="doses")
+
+
+class Vital(Base):
+    __tablename__ = "vitals"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    household_id: Mapped[int] = mapped_column(ForeignKey("households.id"))
+    member_id: Mapped[int] = mapped_column(ForeignKey("members.id"))
+    kind: Mapped[VitalKind] = mapped_column(SAEnum(VitalKind))
+    value_1: Mapped[float] = mapped_column(Numeric(8, 2))
+    value_2: Mapped[Optional[float]] = mapped_column(Numeric(8, 2), nullable=True)
+    unit: Mapped[str] = mapped_column(String(20))
+    measured_at: Mapped[datetime] = mapped_column(DateTime)  # naive IST
+    artifact_id: Mapped[Optional[int]] = mapped_column(ForeignKey("artifacts.id"), nullable=True)
+    quote: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    household: Mapped["Household"] = relationship()
+    member: Mapped["Member"] = relationship(foreign_keys=[member_id])
+    artifact: Mapped[Optional["Artifact"]] = relationship()
+
+
+class VitalThreshold(Base):
+    __tablename__ = "vital_thresholds"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    household_id: Mapped[int] = mapped_column(ForeignKey("households.id"))
+    member_id: Mapped[int] = mapped_column(ForeignKey("members.id"))
+    kind: Mapped[VitalKind] = mapped_column(SAEnum(VitalKind))
+    field: Mapped[str] = mapped_column(String(20))  # "value_1" or "value_2"
+    op: Mapped[VitalOp] = mapped_column(SAEnum(VitalOp))  # "gt" or "lt"
+    limit: Mapped[float] = mapped_column(Numeric(8, 2))
+    note: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    set_by_member_id: Mapped[Optional[int]] = mapped_column(ForeignKey("members.id"), nullable=True)
+    active: Mapped[bool] = mapped_column(default=True)
+
+    household: Mapped["Household"] = relationship()
+    member: Mapped["Member"] = relationship(foreign_keys=[member_id])
+    set_by_member: Mapped[Optional["Member"]] = relationship(foreign_keys=[set_by_member_id])

@@ -7,7 +7,7 @@ from app.db.session import init_db
 from app.db.seed import seed_data
 from app.scheduler.escalation import start_scheduler
 from app.agent.graph import close_checkpointer
-from app.api import artifacts, tasks, members, households, webhooks, events, admin
+from app.api import artifacts, tasks, members, households, webhooks, events, admin, health
 
 
 @asynccontextmanager
@@ -46,11 +46,12 @@ app.include_router(members.router, prefix="/members", tags=["members"])
 app.include_router(households.router, prefix="/households", tags=["households"])
 app.include_router(events.router, prefix="/events", tags=["events"])
 app.include_router(admin.router, prefix="/admin", tags=["admin"])
+app.include_router(health.router, prefix="/health", tags=["health"])
 
 
 @app.get("/health")
 @app.get("/healthz")
-async def health():
+async def health_check():
     return {
         "status": "ok",
         "app": "saath",
