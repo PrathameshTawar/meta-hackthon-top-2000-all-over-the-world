@@ -14,7 +14,7 @@ from app.api import artifacts, tasks, members, households, webhooks, events, adm
 async def lifespan(app: FastAPI):
     await init_db()
     await seed_data()  # auto-seed demo household if empty
-    scheduler = start_scheduler()
+    scheduler = start_scheduler() if settings.run_scheduler else None
     yield
     if scheduler:
         scheduler.shutdown()

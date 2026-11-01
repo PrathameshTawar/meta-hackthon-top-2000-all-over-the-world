@@ -43,8 +43,9 @@ class Settings(BaseSettings):
     default_language: str = "mr"  # Marathi ("mr") or Hindi ("hi")
     timezone_name: str = "Asia/Kolkata"
 
-    # Escalation
+    # Escalation & Background Jobs
     escalation_days_before: int = 3
+    run_scheduler: bool = True
 
     class Config:
         env_file = (".env", "../.env")

@@ -1234,3 +1234,30 @@ async def test_p3_17_sqlite_wal_and_busy_timeout(tmp_path):
     await test_engine.dispose()
     assert str(journal_mode).lower() == "wal"
     assert busy_timeout == 5000
+
+
+# ---------------------------------------------------------------------------
+# P3-18 Tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_p3_18_scheduler_process_control(monkeypatch):
+    import unittest.mock
+    from app.config import settings
+    from app.main import lifespan, app
+
+    mock_start = unittest.mock.MagicMock()
+    monkeypatch.setattr("app.main.start_scheduler", mock_start)
+
+    # When run_scheduler is False, start_scheduler is NOT called during lifespan
+    monkeypatch.setattr(settings, "run_scheduler", False)
+    async with lifespan(app):
+        pass
+    mock_start.assert_not_called()
+
+    # When run_scheduler is True, start_scheduler IS called
+    mock_start.reset_mock()
+    monkeypatch.setattr(settings, "run_scheduler", True)
+    async with lifespan(app):
+        pass
+    mock_start.assert_called_once()
