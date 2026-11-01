@@ -55,7 +55,8 @@ def normalize_payee(payee: str) -> str:
 from app.agent.state import AgentState
 from app.config import settings
 from app.db.models import (
-    Artifact, Task, TaskCategory, TaskStatus, Evidence, Event, Member, MemberRole, Household
+    Artifact, Task, TaskCategory, TaskStatus, Evidence, Event, Member, MemberRole, Household,
+    Vital, VitalThreshold, VitalKind, VitalOp
 )
 from app.db.session import AsyncSessionLocal
 
@@ -739,6 +740,48 @@ async def node_perceive(state: AgentState) -> dict:
 # Node 3: Classify (AI-Driven with Strict Medical Safety Guardrail)
 # ---------------------------------------------------------------------------
 
+async def notify(*args, **kwargs):
+    """Notify helper forwarder to allow test monkeypatching."""
+    from app.api.webhooks import notify as _notify
+    return await _notify(*args, **kwargs)
+
+
+def _match_vitals_pattern(raw_text: str) -> bool:
+    """Check if raw_text matches vitals measurement patterns."""
+    t = norm(raw_text).translate(DEV_DIGITS).lower()
+    # 1. BP: requires a BP keyword somewhere in the text AND (\d{2,3}) (?:/|by|बाय|वर) (\d{2,3})
+    has_bp_kw = bool(re.search(r"(?:\bbp\b|बीपी|रक्तदाब|ब्लड\s*प्रेशर)", t, re.I))
+    has_bp_nums = bool(re.search(r"(\d{2,3})\s*(?:/|by|बाय|वर)\s*(\d{2,3})", t, re.I))
+    if has_bp_kw and has_bp_nums:
+        return True
+
+    # 2. Sugar: keyword in sugar, शुगर, साखर, ग्लुकोज followed within 20 chars by a 2-3 digit number
+    if re.search(r"(?:\bsugar\b|शुगर|साखर|ग्लुकोज)[^\d\n]{0,20}(\d{2,3})", t, re.I):
+        return True
+    if re.search(r"(\d{2,3})[^\d\n]{0,20}(?:\bsugar\b|शुगर|साखर|ग्लुकोज)", t, re.I):
+        return True
+
+    # 3. Weight: weight, वजन + number + optional kg/किलो
+    if re.search(r"(?:\bweight\b|वजन)[^\d\n]{0,20}(\d{2,3}(?:\.\d+)?)", t, re.I):
+        return True
+    if re.search(r"(\d{2,3}(?:\.\d+)?)\s*(?:kg|किलो|कि\.ग्रा\.)", t, re.I):
+        return True
+
+    # 4. SpO2: spo2, ऑक्सिजन, oxygen + 2-digit number
+    if re.search(r"(?:\bspo2\b|\boxygen\b|ऑक्सिजन)[^\d\n]{0,20}(\d{2})\b", t, re.I):
+        return True
+
+    # 5. Pulse: pulse, नाडी, पल्स, heart rate + 2-3 digit number
+    if re.search(r"(?:\bpulse\b|\bheart\s*rate\b|नाडी|पल्स)[^\d\n]{0,20}(\d{2,3})\b", t, re.I):
+        return True
+
+    # 6. Temperature: temp, ताप, तापमान, fever + number with optional decimal
+    if re.search(r"(?:\btemp(?:erature)?\b|\bfever\b|ताप(?:मान)?)[^\d\n]{0,20}(\d{2,3}(?:\.\d+)?)", t, re.I):
+        return True
+
+    return False
+
+
 async def node_classify(state: AgentState) -> dict:
     r"""
     Sort document/audio into appropriate category.
@@ -752,6 +795,15 @@ async def node_classify(state: AgentState) -> dict:
     # Check for voice status question ("काय बाकी आहे?" / "what is pending?")
     if any(q in text_lower for q in ["काय बाकी आहे", "काय बाकी", "what is pending", "what's pending", "pending tasks"]):
         return {"category": "status_query"}
+
+    # H-3: Vitals detection (after status query check, before bill/medical logic)
+    diagnostic = (
+        any(k in text_lower for k in MEDICAL_KEYWORDS + HINDI_MEDICAL)
+        or doc_type in ("prescription", "lab_report")
+        or bool(re.search(r"\b\d+\s?mg\b", text_lower))
+    )
+    if not diagnostic and _match_vitals_pattern(raw_text):
+        return {"category": "vital", "medical_context": False}
 
     medical_context = False
     # 1. Critical Safeguard: Check MGL gas bill FIRST to ensure it is NEVER flagged as medical
@@ -838,6 +890,359 @@ async def node_status(state: AgentState) -> dict:
     return {
         "parent_reply": reply,
         "sibling_notification": "",
+    }
+
+
+async def node_vital(state: AgentState) -> dict:
+    """
+    Extract health vital measurements, validate verbatim quotes, check plausibility,
+    attribute to parent, persist to DB, check family-set thresholds, and reply honestly.
+    Zero medical interpretation: never uses words like high/low/normal/dangerous.
+    """
+    raw_text = state.get("raw_text") or ""
+    household_id = state.get("household_id")
+    artifact_id = state.get("artifact_id")
+
+    readings = []
+
+    # 1. Deterministic regex extraction
+    # BP
+    if re.search(r"(?:bp|बीपी|रक्तदाब|ब्लड\s*प्रेशर)", raw_text, re.I):
+        bp_m = re.search(r"((?:(?:bp|बीपी|रक्तदाब|ब्लड\s*प्रेशर)\s*)?([०-९\d]{2,3})\s*(?:/|by|बाय|वर)\s*([०-९\d]{2,3}))", raw_text, re.I)
+        if bp_m:
+            sys_val = float(bp_m.group(2).translate(DEV_DIGITS))
+            dia_val = float(bp_m.group(3).translate(DEV_DIGITS))
+            quote = bp_m.group(0).strip()
+            readings.append({
+                "kind": VitalKind.bp,
+                "value_1": sys_val,
+                "value_2": dia_val,
+                "unit": "mmHg",
+                "quote": quote,
+            })
+
+    # Sugar
+    sugar_m = re.search(r"((?:sugar|शुगर|साखर|ग्लुकोज)[^\d\n०-९]{0,20}([०-९\d]{2,3}))", raw_text, re.I)
+    if not sugar_m:
+        sugar_m = re.search(r"(([०-९\d]{2,3})[^\d\n०-९]{0,20}(?:sugar|शुगर|साखर|ग्लुकोज))", raw_text, re.I)
+    if sugar_m:
+        num_str = sugar_m.group(2) if sugar_m.lastindex and sugar_m.lastindex >= 2 else re.search(r"[०-९\d]+", sugar_m.group(0)).group(0)
+        s_val = float(num_str.translate(DEV_DIGITS))
+        readings.append({
+            "kind": VitalKind.sugar,
+            "value_1": s_val,
+            "value_2": None,
+            "unit": "mg/dL",
+            "quote": sugar_m.group(0).strip(),
+        })
+
+    # Weight
+    weight_m = re.search(r"((?:weight|वजन)[^\d\n०-९]{0,20}([०-९\d]{2,3}(?:\.[०-९\d]+)?)\s*(?:kg|किलो|कि\.ग्रा\.?)?)", raw_text, re.I)
+    if not weight_m:
+        weight_m = re.search(r"(([०-९\d]{2,3}(?:\.[०-९\d]+)?)\s*(?:kg|किलो|कि\.ग्रा\.)[^\d\n०-९]{0,20}(?:weight|वजन)?)", raw_text, re.I)
+    if weight_m:
+        num_str = weight_m.group(2) if weight_m.lastindex and weight_m.lastindex >= 2 else re.search(r"[०-९\d]+(?:\.[०-९\d]+)?", weight_m.group(0)).group(0)
+        w_val = float(num_str.translate(DEV_DIGITS))
+        readings.append({
+            "kind": VitalKind.weight,
+            "value_1": w_val,
+            "value_2": None,
+            "unit": "kg",
+            "quote": weight_m.group(0).strip(),
+        })
+
+    # SpO2
+    spo2_m = re.search(r"((?:spo2|ऑक्सिजन|oxygen)[^\d\n०-९]{0,20}([०-९\d]{2}))\b", raw_text, re.I)
+    if spo2_m:
+        sp_val = float(spo2_m.group(2).translate(DEV_DIGITS))
+        readings.append({
+            "kind": VitalKind.spo2,
+            "value_1": sp_val,
+            "value_2": None,
+            "unit": "%",
+            "quote": spo2_m.group(0).strip(),
+        })
+
+    # Pulse
+    pulse_m = re.search(r"((?:pulse|नाडी|पल्स|heart\s*rate)[^\d\n०-९]{0,20}([०-९\d]{2,3}))\b", raw_text, re.I)
+    if pulse_m:
+        p_val = float(pulse_m.group(2).translate(DEV_DIGITS))
+        readings.append({
+            "kind": VitalKind.pulse,
+            "value_1": p_val,
+            "value_2": None,
+            "unit": "bpm",
+            "quote": pulse_m.group(0).strip(),
+        })
+
+    # Temperature
+    temp_m = re.search(r"((?:temp(?:erature)?|ताप(?:मान)?|fever)[^\d\n०-९]{0,20}([०-९\d]{2,3}(?:\.[०-९\d]+)?))", raw_text, re.I)
+    if temp_m:
+        t_val = float(temp_m.group(2).translate(DEV_DIGITS))
+        unit = "°C" if t_val < 50 else "°F"
+        readings.append({
+            "kind": VitalKind.temperature,
+            "value_1": t_val,
+            "value_2": None,
+            "unit": unit,
+            "quote": temp_m.group(0).strip(),
+        })
+
+    # Fallback to LLM if key is set and regex finds nothing
+    if not readings and settings.get_api_key():
+        prompt = (
+            "Extract health vital measurements from this text as JSON list of objects. "
+            "Each object must have:\n"
+            "- kind: one of ['bp', 'sugar', 'weight', 'spo2', 'pulse', 'temperature']\n"
+            "- value_1: number\n"
+            "- value_2: number or null (diastolic for bp)\n"
+            "- unit: string\n"
+            "- quote: exact verbatim substring from text\n"
+            f"Text:\n{raw_text}\n\nJSON:"
+        )
+        llm_resp = await _call_llm(prompt)
+        if llm_resp:
+            try:
+                m_json = re.search(r"\[.*\]", llm_resp, re.DOTALL)
+                if m_json:
+                    data = json.loads(m_json.group(0))
+                    for item in data:
+                        kind_str = item.get("kind", "").lower()
+                        if kind_str in VitalKind.__members__:
+                            readings.append({
+                                "kind": VitalKind(kind_str),
+                                "value_1": float(item["value_1"]),
+                                "value_2": float(item["value_2"]) if item.get("value_2") is not None else None,
+                                "unit": item.get("unit", ""),
+                                "quote": item.get("quote", ""),
+                            })
+            except Exception as e:
+                logger.warning(f"Failed to parse LLM vitals JSON: {e}")
+
+    # Validate quotes and plausibility
+    valid_readings = []
+    for r in readings:
+        q = r.get("quote", "")
+        if not q or norm(q) not in norm(raw_text):
+            continue
+        nums_in_q = [float(x) for x in re.findall(r"\d+(?:\.\d+)?", norm(q).translate(DEV_DIGITS))]
+        if r.get("value_2") is not None:
+            expected_nums = [float(r["value_1"]), float(r["value_2"])]
+        else:
+            expected_nums = [float(r["value_1"])]
+
+        if nums_in_q != expected_nums:
+            continue
+
+        k = r["kind"]
+        v1 = float(r["value_1"])
+        v2 = float(r["value_2"]) if r.get("value_2") is not None else None
+
+        if k == VitalKind.bp:
+            if v2 is None or not (60 <= v1 <= 260) or not (30 <= v2 <= 160):
+                logger.info(f"Dropped implausible BP: {v1}/{v2}")
+                continue
+        elif k == VitalKind.sugar:
+            if not (20 <= v1 <= 700):
+                logger.info(f"Dropped implausible sugar: {v1}")
+                continue
+        elif k == VitalKind.weight:
+            if not (20 <= v1 <= 250):
+                logger.info(f"Dropped implausible weight: {v1}")
+                continue
+        elif k == VitalKind.spo2:
+            if not (50 <= v1 <= 100):
+                logger.info(f"Dropped implausible spo2: {v1}")
+                continue
+        elif k == VitalKind.pulse:
+            if not (30 <= v1 <= 220):
+                logger.info(f"Dropped implausible pulse: {v1}")
+                continue
+        elif k == VitalKind.temperature:
+            if not ((90 <= v1 <= 110) or (32 <= v1 <= 43)):
+                logger.info(f"Dropped implausible temperature: {v1}")
+                continue
+
+        valid_readings.append(r)
+
+    # Resolve recipient parent & household language
+    async with AsyncSessionLocal() as db:
+        hh = await db.get(Household, household_id)
+        lang = hh.primary_language if hh else "mr"
+
+        parents_res = await db.execute(
+            select(Member).where(Member.household_id == household_id, Member.role == MemberRole.parent)
+        )
+        parents = parents_res.scalars().all()
+
+        sender = None
+        chat_id = state.get("chat_id")
+        sender_id = state.get("sender_member_id")
+        if sender_id:
+            sender = await db.get(Member, sender_id)
+        elif chat_id:
+            s_res = await db.execute(
+                select(Member).where(
+                    (Member.telegram_id == str(chat_id))
+                    | (Member.phone == str(chat_id))
+                    | (Member.phone == f"+{str(chat_id).lstrip('+')}")
+                )
+            )
+            sender = s_res.scalars().first()
+
+        target_parent = None
+        if sender and sender.role == MemberRole.parent:
+            target_parent = sender
+        elif sender and sender.role == MemberRole.child:
+            if len(parents) == 1:
+                target_parent = parents[0]
+            elif len(parents) > 1:
+                matching = [p for p in parents if p.name.lower() in raw_text.lower()]
+                if len(matching) == 1:
+                    target_parent = matching[0]
+        else:
+            if len(parents) == 1:
+                target_parent = parents[0]
+            elif len(parents) > 1:
+                matching = [p for p in parents if p.name.lower() in raw_text.lower()]
+                if len(matching) == 1:
+                    target_parent = matching[0]
+
+        if not valid_readings:
+            reply = (
+                "आम्हाला हे वाचन नोंदवता आले नाही. कृपया पुन्हा तपासून पाठवा. 🙏"
+                if lang != "hi"
+                else "हम यह रीडिंग दर्ज नहीं कर सके। कृपया दोबारा जांच कर भेजें। 🙏"
+            )
+            return {"parent_reply": reply, "vital_readings": []}
+
+        if target_parent is None:
+            reply = (
+                "हे वाचन कोणाचे आहे? कृपया पालकांचे नाव सांगा. 🙏"
+                if lang != "hi"
+                else "यह रीडिंग किसकी है? कृपया नाम बताएं। 🙏"
+            )
+            return {"parent_reply": reply, "vital_readings": []}
+
+        # Save Vitals
+        now = get_current_ist_datetime().replace(tzinfo=None)
+        saved_vitals = []
+        for r in valid_readings:
+            vital = Vital(
+                household_id=household_id,
+                member_id=target_parent.id,
+                kind=r["kind"],
+                value_1=r["value_1"],
+                value_2=r.get("value_2"),
+                unit=r.get("unit", ""),
+                measured_at=now,
+                artifact_id=artifact_id,
+                quote=r["quote"],
+            )
+            db.add(vital)
+            saved_vitals.append((r, vital))
+        await db.commit()
+        for _, v in saved_vitals:
+            await db.refresh(v)
+
+        # Check thresholds
+        thresh_res = await db.execute(
+            select(VitalThreshold).where(
+                VitalThreshold.member_id == target_parent.id,
+                VitalThreshold.active == True,
+            )
+        )
+        thresholds = thresh_res.scalars().all()
+
+        children_res = await db.execute(
+            select(Member).where(
+                Member.household_id == household_id,
+                Member.role == MemberRole.child,
+            )
+        )
+        children = children_res.scalars().all()
+
+        threshold_crossed = False
+        notified_threshold_ids = set()
+        time_hh_mm = now.strftime("%H:%M")
+
+        for r, vital in saved_vitals:
+            if r["kind"] == VitalKind.bp:
+                reading_str = f"{int(r['value_1'])}/{int(r['value_2'])}"
+            else:
+                v1_str = f"{int(r['value_1'])}" if float(r['value_1']).is_integer() else f"{r['value_1']}"
+                unit_str = f" {r['unit']}" if r.get('unit') else ""
+                reading_str = f"{v1_str}{unit_str}"
+
+            for th in thresholds:
+                if th.kind != r["kind"] or th.id in notified_threshold_ids:
+                    continue
+
+                val_to_check = r["value_1"] if th.field == "value_1" else r.get("value_2")
+                if val_to_check is None:
+                    continue
+
+                is_crossed = False
+                if th.op in ("gt", VitalOp.gt) and float(val_to_check) > float(th.limit):
+                    is_crossed = True
+                elif th.op in ("lt", VitalOp.lt) and float(val_to_check) < float(th.limit):
+                    is_crossed = True
+
+                if is_crossed:
+                    threshold_crossed = True
+                    notified_threshold_ids.add(th.id)
+                    op_sym = ">" if th.op in ("gt", VitalOp.gt) else "<"
+                    limit_val = int(th.limit) if float(th.limit).is_integer() else th.limit
+                    limit_expr = f"{th.field} {op_sym} {limit_val}"
+                    note_str = f", {th.note}" if th.note else ""
+                    alert_text = (
+                        f"{target_parent.name} reported {reading_str} at {time_hh_mm}, "
+                        f"beyond the limit your family set ({limit_expr}{note_str}). Please check in."
+                    )
+
+                    target_children = [c for c in children if c.id == th.set_by_member_id]
+                    if not target_children:
+                        target_children = children
+
+                    try:
+                        for child in target_children:
+                            await notify(
+                                member=child,
+                                text=alert_text,
+                                template_name="saath_vital_alert",
+                                template_language="en_US",
+                                template_params=[target_parent.name, reading_str, time_hh_mm, limit_expr],
+                            )
+                    except Exception as ex:
+                        logger.warning(f"Failed to notify sibling of vital threshold: {ex}")
+
+        # Parent Reply (Zero medical interpretation)
+        readings_summary = ", ".join(
+            f"{int(r['value_1'])}/{int(r['value_2'])}" if r["kind"] == VitalKind.bp else f"{int(r['value_1']) if float(r['value_1']).is_integer() else r['value_1']}"
+            for r in valid_readings
+        )
+
+        if lang == "hi":
+            parent_reply = f"दर्ज किया: {readings_summary}। 🙏"
+            if threshold_crossed:
+                parent_reply += " आपके बच्चों को सूचित कर दिया गया है।"
+        else:
+            parent_reply = f"नोंद केली: {readings_summary}. 🙏"
+            if threshold_crossed:
+                parent_reply += " तुमच्या मुलांना कळवले आहे."
+
+    await _log_event(
+        task_id=None,
+        household_id=household_id,
+        actor="agent:vital",
+        action="recorded_vitals",
+        reason=f"Recorded {len(valid_readings)} vitals for {target_parent.name}",
+        payload={"readings_count": len(valid_readings), "threshold_crossed": threshold_crossed},
+    )
+
+    return {
+        "parent_reply": parent_reply,
+        "vital_readings": [v.id for _, v in saved_vitals],
     }
 
 async def node_guardrail(state: AgentState) -> dict:

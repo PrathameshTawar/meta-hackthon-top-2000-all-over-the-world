@@ -270,3 +270,163 @@ async def test_h2_medicine_reminders_and_escalation(monkeypatch):
         p2_member = await db.get(Member, p2_id)
         res_wrong, _, _ = await record_dose_taken(dose_9am_id, p2_member)
         assert res_wrong == DoseTakenResult.household_mismatch
+
+
+# ---------------------------------------------------------------------------
+# H-3 Tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_h3_vitals_by_voice_note_or_text(monkeypatch):
+    from app.agent.nodes import node_classify, node_vital, norm
+    from app.agent.graph import route_after_classify
+    from app.db.models import Vital, VitalThreshold, VitalKind, VitalOp, Member, MemberRole, Household, Artifact, ArtifactType
+    from app.db.session import AsyncSessionLocal
+    from sqlalchemy import select
+
+    # Setup household with 1 parent (Baba) and 1 child (Amit)
+    async with AsyncSessionLocal() as db:
+        h = Household(name="Vitals Family", primary_language="mr")
+        db.add(h)
+        await db.commit()
+        await db.refresh(h)
+
+        baba = Member(household_id=h.id, name="Baba", role=MemberRole.parent, phone=f"+919{uuid.uuid4().int % 1000000000:09d}")
+        amit = Member(household_id=h.id, name="Amit", role=MemberRole.child, phone=f"+919{uuid.uuid4().int % 1000000000:09d}")
+        db.add_all([baba, amit])
+        await db.commit()
+        await db.refresh(baba)
+        await db.refresh(amit)
+
+        # Artifact
+        art = Artifact(
+            household_id=h.id,
+            type=ArtifactType.voice,
+            file_url="test://voice.ogg",
+            raw_text="आज बीपी १५०/९५ आहे",
+        )
+        db.add(art)
+        await db.commit()
+        await db.refresh(art)
+
+        # Threshold: BP value_1 gt 140
+        thresh = VitalThreshold(
+            household_id=h.id,
+            member_id=baba.id,
+            kind=VitalKind.bp,
+            field="value_1",
+            op=VitalOp.gt,
+            limit=140.0,
+            note="Doctor advised",
+            set_by_member_id=amit.id,
+            active=True,
+        )
+        db.add(thresh)
+        await db.commit()
+
+        h_id = h.id
+        baba_id = baba.id
+        amit_id = amit.id
+        art_id = art.id
+        baba_phone = baba.phone
+
+    notifications = []
+    async def mock_notify(member, text, **kwargs):
+        notifications.append((member.id, text, kwargs))
+        return True
+    monkeypatch.setattr("app.agent.nodes.notify", mock_notify)
+
+    # 1. "आज बीपी १५०/९५ आहे" -> category "vital" and node_vital saves 150/95 with verbatim quote
+    state1 = {
+        "household_id": h_id,
+        "artifact_id": art_id,
+        "raw_text": "आज बीपी १५०/९५ आहे",
+        "chat_id": baba_phone,
+    }
+    c_res1 = await node_classify(state1)
+    assert c_res1["category"] == "vital"
+    assert route_after_classify(c_res1) == "vital"
+
+    state1.update(c_res1)
+    v_res1 = await node_vital(state1)
+    assert "parent_reply" in v_res1
+    parent_reply1 = v_res1["parent_reply"]
+
+    # Rule: no interpretation in replies
+    for forbidden in ["high", "low", "normal", "जास्त", "कमी"]:
+        assert forbidden not in parent_reply1.lower()
+
+    # Check saved vital in DB
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(select(Vital).where(Vital.household_id == h_id, Vital.kind == VitalKind.bp))
+        vitals = res.scalars().all()
+        assert len(vitals) == 1
+        v = vitals[0]
+        assert float(v.value_1) == 150.0
+        assert float(v.value_2) == 95.0
+        assert norm(v.quote) in norm("आज बीपी १५०/९५ आहे")
+
+    # Threshold value_1 gt 140 triggers exactly one alert to amit
+    assert len(notifications) == 1
+    alert = notifications[0]
+    assert alert[0] == amit_id
+    assert "beyond the limit your family set" in alert[1]
+    assert "Doctor advised" in alert[1]
+    for forbidden in ["high", "low", "normal", "dangerous"]:
+        assert forbidden not in alert[1].lower()
+
+    # 2. "BP 150 by 95" -> same
+    notifications.clear()
+    state2 = {
+        "household_id": h_id,
+        "artifact_id": art_id,
+        "raw_text": "BP 150 by 95",
+        "chat_id": baba_phone,
+    }
+    c_res2 = await node_classify(state2)
+    assert c_res2["category"] == "vital"
+
+    # 3. "sugar 180 fasting" -> sugar 180
+    state3 = {
+        "household_id": h_id,
+        "artifact_id": art_id,
+        "raw_text": "sugar 180 fasting",
+        "chat_id": baba_phone,
+    }
+    c_res3 = await node_classify(state3)
+    assert c_res3["category"] == "vital"
+    v_res3 = await node_vital(state3)
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(select(Vital).where(Vital.household_id == h_id, Vital.kind == VitalKind.sugar))
+        sugar_vitals = res.scalars().all()
+        assert len(sugar_vitals) == 1
+        assert float(sugar_vitals[0].value_1) == 180.0
+
+    # 4. Lab report containing "fasting blood sugar 180 mg/dl" still goes to guardrail
+    state4 = {
+        "household_id": h_id,
+        "artifact_id": art_id,
+        "raw_text": "Pathology Lab Report: fasting blood sugar 180 mg/dl",
+        "doc_type": "lab_report",
+    }
+    c_res4 = await node_classify(state4)
+    assert c_res4["category"] == "medical"
+    assert route_after_classify(c_res4) == "guardrail"
+
+    # 5. Implausible "BP 15/9" saves nothing
+    async with AsyncSessionLocal() as db:
+        pre_count = (await db.execute(select(Vital).where(Vital.household_id == h_id))).scalars().all()
+    state5 = {
+        "household_id": h_id,
+        "artifact_id": art_id,
+        "raw_text": "BP 15/9",
+        "chat_id": baba_phone,
+    }
+    v_res5 = await node_vital(state5)
+    async with AsyncSessionLocal() as db:
+        post_count = (await db.execute(select(Vital).where(Vital.household_id == h_id))).scalars().all()
+        assert len(post_count) == len(pre_count), "Implausible BP 15/9 must not save to DB"
+
+    for forbidden in ["high", "low", "normal", "जास्त", "कमी"]:
+        assert forbidden not in v_res5.get("parent_reply", "").lower()
+

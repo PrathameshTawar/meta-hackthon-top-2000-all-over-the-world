@@ -25,7 +25,7 @@ from app.agent.nodes import (
     node_ingest,
     node_perceive,
     node_classify,
-    node_guardrail, node_status,
+    node_guardrail, node_status, node_vital,
     node_extract,
     node_verify,
     node_deduplicate,
@@ -45,12 +45,14 @@ def route_after_extract(state: AgentState) -> str:
 
 
 def route_after_classify(state: AgentState) -> str:
-    """After classification, branch to guardrail for medical content or status for status queries."""
+    """After classification, branch to guardrail for medical content, status for status queries, or vital for vitals."""
     cat = state.get("category")
     if cat == "medical":
         return "guardrail"
     elif cat == "status_query":
         return "status"
+    elif cat == "vital":
+        return "vital"
     return "extract" 
 
 def route_after_verify(state: AgentState) -> str:
@@ -114,6 +116,7 @@ def build_graph() -> StateGraph:
     graph.add_node("classify", node_classify)
     graph.add_node("guardrail", node_guardrail)
     graph.add_node("status", node_status)
+    graph.add_node("vital", node_vital)
     graph.add_node("extract", node_extract)
     graph.add_node("verify", node_verify)
     graph.add_node("interrupt", node_interrupt)
@@ -129,11 +132,12 @@ def build_graph() -> StateGraph:
     graph.add_conditional_edges(
         "classify",
         route_after_classify,
-        {"guardrail": "guardrail", "status": "status", "extract": "extract"},
+        {"guardrail": "guardrail", "status": "status", "vital": "vital", "extract": "extract"},
     )
 
     graph.add_edge("guardrail", END)
     graph.add_edge("status", END)
+    graph.add_edge("vital", END)
     graph.add_conditional_edges("extract", route_after_extract, {"verify": "verify", END: END})
 
     graph.add_conditional_edges(

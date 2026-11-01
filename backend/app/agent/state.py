@@ -48,6 +48,7 @@ class AgentState(TypedDict, total=False):
     parent_reply: str           # Marathi message back to parent
     sibling_notification: str
     call_script: Optional[str]
+    vital_readings: Optional[list]
 
     # --- meta ---
     errors: list[str]
