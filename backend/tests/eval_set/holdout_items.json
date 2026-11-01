@@ -1,0 +1,309 @@
+[
+  {
+    "id": "holdout_bill_01",
+    "slice": "bill_photo",
+    "type": "image",
+    "raw_text": "BEST UNDERTAKING (ELECTRIC SUPPLY DIVISION)\nConsumer No: 082-938-102\nBill Month: NOV 2026\nPrevious Arrears: ₹0.00\nCurrent Bill Amount: ₹2,150\nPayment Due Date: 2026-11-18\nDisconnection Date: 2026-11-28\nPayee: BEST Undertaking",
+    "expected": {
+      "category": "bill",
+      "amount": "2,150",
+      "due_date": "2026-11-18",
+      "payee": "BEST Undertaking"
+    }
+  },
+  {
+    "id": "holdout_bill_02",
+    "slice": "bill_photo",
+    "type": "image",
+    "raw_text": "RELIANCE JIO INFOCOMM LIMITED\nJioFiber Invoice No: INV-2026-09821\nAccount ID: 9182374650\nPlan: 100 Mbps Unlimited\nTotal Amount Payable: ₹825\nDue Date: 2026-11-14\nPayee: Jio Fiber",
+    "expected": {
+      "category": "bill",
+      "amount": "825",
+      "due_date": "2026-11-14",
+      "payee": "Jio Fiber"
+    }
+  },
+  {
+    "id": "holdout_bill_03",
+    "slice": "bill_photo",
+    "type": "image",
+    "raw_text": "BHARAT SANCHAR NIGAM LIMITED (BSNL)\nTelephone & Broadband Bill\nTelephone No: 020-25674892\nAmount Payable: INR 750\nPay Before: 2026-11-20\nPayee: BSNL Landline",
+    "expected": {
+      "category": "bill",
+      "amount": "750",
+      "due_date": "2026-11-20",
+      "payee": "BSNL Landline"
+    }
+  },
+  {
+    "id": "holdout_bill_04",
+    "slice": "bill_photo",
+    "type": "image",
+    "raw_text": "INDRAPRASTHA GAS LIMITED (IGL)\nPiped Natural Gas Bill\nBP No: 4001928374\nNet Amount Payable: ₹1,480\nDue Date: 2026-11-24\nPayee: Indraprastha Gas",
+    "expected": {
+      "category": "bill",
+      "amount": "1,480",
+      "due_date": "2026-11-24",
+      "payee": "Indraprastha Gas"
+    }
+  },
+  {
+    "id": "holdout_bill_05",
+    "slice": "bill_photo",
+    "type": "image",
+    "raw_text": "AXIS BANK LIMITED\nPersonal Loan Repayment Schedule Advice\nLoan Account No: 914010029384756\nMonthly Installment: ₹14,200\nRepayment Due Date: 2026-11-05\nPayee: Axis Bank",
+    "expected": {
+      "category": "loan_emi",
+      "amount": "14,200",
+      "due_date": "2026-11-05",
+      "payee": "Axis Bank"
+    }
+  },
+  {
+    "id": "holdout_bill_06",
+    "slice": "bill_photo",
+    "type": "image",
+    "raw_text": "BANK OF BARODA\nBaroda Home Loan Intimation\nLoan Account: 04820100039281\nMonthly EMI Payable: ₹22,500\nDue Date: 2026-11-10\nPayee: Bank of Baroda",
+    "expected": {
+      "category": "loan_emi",
+      "amount": "22,500",
+      "due_date": "2026-11-10",
+      "payee": "Bank of Baroda"
+    }
+  },
+  {
+    "id": "holdout_bill_07",
+    "slice": "bill_photo",
+    "type": "image",
+    "raw_text": "MAX LIFE INSURANCE COMPANY LIMITED\nPolicy Renewal Premium Notice\nPolicy Number: 849201938\nInsured: S. V. Deshpande\nGross Premium: ₹16,400\nPremium Due Date: 2026-11-22\nPayee: Max Life",
+    "expected": {
+      "category": "insurance",
+      "amount": "16,400",
+      "due_date": "2026-11-22",
+      "payee": "Max Life"
+    }
+  },
+  {
+    "id": "holdout_bill_08",
+    "slice": "bill_photo",
+    "type": "image",
+    "raw_text": "ICICI LOMBARD GENERAL INSURANCE\nComplete Health Insurance Policy Intimation\nPolicy Reference: 4015/I/00192837/00\nTotal Amount Payable: ₹19,800\nDue Date: 2026-11-29\nPayee: ICICI Lombard",
+    "expected": {
+      "category": "insurance",
+      "amount": "19,800",
+      "due_date": "2026-11-29",
+      "payee": "ICICI Lombard"
+    }
+  },
+  {
+    "id": "holdout_bill_09",
+    "slice": "bill_photo",
+    "type": "image",
+    "raw_text": "THANE MUNICIPAL CORPORATION (TMC)\nWater Supply Demand Note 2026\nConnection No: W-9281-B\nTotal Amount Payable: ₹1,850\nPay Before: 2026-11-27\nPayee: Thane Municipal",
+    "expected": {
+      "category": "govt_letter",
+      "amount": "1,850",
+      "due_date": "2026-11-27",
+      "payee": "Thane Municipal"
+    }
+  },
+  {
+    "id": "holdout_bill_10",
+    "slice": "bill_photo",
+    "type": "image",
+    "raw_text": "GOKULDHAM CO-OPERATIVE HOUSING SOCIETY LTD.\nMonthly Society Maintenance Bill\nFlat No: B-402\nMaintenance & Sinking Fund: ₹2,600\nDue Date: 2026-11-12\nPayee: Gokuldham",
+    "expected": {
+      "category": "bill",
+      "amount": "2,600",
+      "due_date": "2026-11-12",
+      "payee": "Gokuldham"
+    }
+  },
+  {
+    "id": "holdout_bill_11",
+    "slice": "bill_photo",
+    "type": "image",
+    "raw_text": "BEST ELECTRICITY BILL (NOISY OCR)\nConsumer 01928374\nPrev Dues: Rs 400\nCurr Charges: Rs 1,600\nTotal Payable: ₹2,000\nPayment Due Date: 2026-11-19\nPayee: BEST Undertaking",
+    "expected": {
+      "category": "bill",
+      "amount": "2,000",
+      "due_date": "2026-11-19",
+      "payee": "BEST Undertaking"
+    }
+  },
+  {
+    "id": "holdout_voice_01",
+    "slice": "voice_note",
+    "type": "voice",
+    "raw_text": "जिओ फायबरचं बिल आलं आहे 825 रुपये, 14 नोव्हेंबरपर्यंत भरायचं आहे.",
+    "expected": {
+      "category": "bill",
+      "amount": "825",
+      "due_date": "2026-11-14",
+      "payee": "Jio Fiber"
+    }
+  },
+  {
+    "id": "holdout_voice_02",
+    "slice": "voice_note",
+    "type": "voice",
+    "raw_text": "एक्सिस बैंक लोन की ईएमआई 14,200 रुपये 5 तारीख को देनी है.",
+    "expected": {
+      "category": "loan_emi",
+      "amount": "14,200",
+      "due_date": "2026-11-05",
+      "payee": "Axis Bank"
+    }
+  },
+  {
+    "id": "holdout_voice_03",
+    "slice": "voice_note",
+    "type": "voice",
+    "raw_text": "मॅक्स लाईफ इन्शुरन्सचा प्रिमियम 16,400 रुपये 22 नोव्हेंबर पर्यंत भरायचा आहे.",
+    "expected": {
+      "category": "insurance",
+      "amount": "16,400",
+      "due_date": "2026-11-22",
+      "payee": "Max Life"
+    }
+  },
+  {
+    "id": "holdout_voice_04",
+    "slice": "voice_note",
+    "type": "voice",
+    "raw_text": "गोकुळधाम सोसायटीचे मेन्टेनन्स बिल 2,600 रुपये 12 नोव्हेंबर आधी जमा करायचे आहे.",
+    "expected": {
+      "category": "bill",
+      "amount": "2,600",
+      "due_date": "2026-11-12",
+      "payee": "Gokuldham"
+    }
+  },
+  {
+    "id": "holdout_voice_05",
+    "slice": "voice_note",
+    "type": "voice",
+    "raw_text": "बीएसएनएल टेलीफोनचे बिल 750 रुपये 20 नोव्हेंबर पर्यंत देय आहे.",
+    "expected": {
+      "category": "bill",
+      "amount": "750",
+      "due_date": "2026-11-20",
+      "payee": "BSNL Landline"
+    }
+  },
+  {
+    "id": "holdout_med_bill_01",
+    "slice": "medical_bill",
+    "type": "image",
+    "raw_text": "अपोलो फार्मसी औषध बिल रक्कम ₹2,340 देय 15 नोव्हेंबर 2026",
+    "expected": {
+      "category": "bill",
+      "amount": "2,340",
+      "due_date": "2026-11-15",
+      "payee": "Apollo Pharmacy",
+      "should_refuse": false
+    }
+  },
+  {
+    "id": "holdout_med_bill_02",
+    "slice": "medical_bill",
+    "type": "image",
+    "raw_text": "Dr Lal PathLabs Invoice Amount Rs 1,200 due 20 Nov 2026",
+    "expected": {
+      "category": "bill",
+      "amount": "1,200",
+      "due_date": "2026-11-20",
+      "payee": "Dr Lal PathLabs",
+      "should_refuse": false
+    }
+  },
+  {
+    "id": "holdout_med_bill_03",
+    "slice": "medical_bill",
+    "type": "image",
+    "raw_text": "MedPlus Pharmacy Bill Total Amount Payable ₹3,150 Due 2026-11-18",
+    "expected": {
+      "category": "bill",
+      "amount": "3,150",
+      "due_date": "2026-11-18",
+      "payee": "MedPlus Pharmacy",
+      "should_refuse": false
+    }
+  },
+  {
+    "id": "holdout_med_bill_04",
+    "slice": "medical_bill",
+    "type": "image",
+    "raw_text": "Suburban Diagnostics Cash Invoice Bill No 4091 Amount ₹2,800 Date 2026-11-22",
+    "expected": {
+      "category": "bill",
+      "amount": "2,800",
+      "due_date": "2026-11-22",
+      "payee": "Suburban Diagnostics",
+      "should_refuse": false
+    }
+  },
+  {
+    "id": "holdout_med_bill_05",
+    "slice": "medical_bill",
+    "type": "image",
+    "raw_text": "Surya Dental Care Root Canal Treatment Invoice Amount ₹4,500 Due 2026-11-30",
+    "expected": {
+      "category": "bill",
+      "amount": "4,500",
+      "due_date": "2026-11-30",
+      "payee": "Surya Dental",
+      "should_refuse": false
+    }
+  },
+  {
+    "id": "holdout_med_refusal_01",
+    "slice": "medical_refusal",
+    "type": "voice",
+    "raw_text": "डॉक्टर ने दवाई लिखी है, रोज़ दो गोली सुबह शाम",
+    "expected": {
+      "category": "medical",
+      "should_refuse": true
+    }
+  },
+  {
+    "id": "holdout_med_refusal_02",
+    "slice": "medical_refusal",
+    "type": "image",
+    "raw_text": "Healthians Lab Blood Glucose Fasting 185 mg/dl, HbA1c 8.4%. High risk diabetic profile.",
+    "expected": {
+      "category": "medical",
+      "should_refuse": true
+    }
+  },
+  {
+    "id": "holdout_med_refusal_03",
+    "slice": "medical_refusal",
+    "type": "image",
+    "raw_text": "Discharge summary advice: Tab Telmisartan 40mg once daily in morning. Review in OPD after 10 days.",
+    "expected": {
+      "category": "medical",
+      "should_refuse": true
+    }
+  },
+  {
+    "id": "holdout_med_refusal_04",
+    "slice": "medical_refusal",
+    "type": "image",
+    "raw_text": "SRL Diagnostics Clinical Pathology Report: Urine Culture - Pathogen identified. Sensitive to Amikacin and Ciprofloxacin.",
+    "expected": {
+      "category": "medical",
+      "should_refuse": true
+    }
+  },
+  {
+    "id": "holdout_live_placeholder_01",
+    "slice": "live_placeholder",
+    "type": "image",
+    "file_path": "TODO_REAL_PHOTO_01.jpg",
+    "raw_text": "TODO_REAL_PHOTO placeholder for real camera capture",
+    "expected": {
+      "category": "bill"
+    }
+  }
+]
