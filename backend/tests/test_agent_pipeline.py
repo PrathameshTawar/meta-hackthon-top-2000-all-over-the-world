@@ -1007,3 +1007,64 @@ async def test_p1_10_exclude_generated_title_from_grounding():
             verify_res = await node_verify({"raw_text": raw_text, "extracted": extract_res["extracted"], "confidence": extract_res["confidence"]})
             assert verify_res["verify_passed"] is True
             assert len(verify_res["verify_failures"]) == 0
+
+
+# ---------------------------------------------------------------------------
+# P1-11 Tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_p1_11_robust_dedup_keys():
+    import random
+    from app.agent.nodes import node_deduplicate
+
+    # 1. "New India Assurance policy" does not normalize to LIC
+    d_nia = await node_deduplicate({
+        "household_id": 1,
+        "extracted": {
+            "payee": {"value": "New India Assurance policy"},
+            "amount": {"value": "₹3,500"},
+            "due_date": {"value": "2026-11-15T00:00:00"},
+        }
+    })
+    d_lic = await node_deduplicate({
+        "household_id": 1,
+        "extracted": {
+            "payee": {"value": "LIC"},
+            "amount": {"value": "₹3,500"},
+            "due_date": {"value": "2026-11-15T00:00:00"},
+        }
+    })
+    assert d_nia["dedupe_key"] != d_lic["dedupe_key"], "New India Assurance policy must not normalize to LIC"
+
+    # 2. Two tasks, same payee and amount, different consumer numbers -> not merged
+    d_cn1 = await node_deduplicate({
+        "household_id": 1,
+        "extracted": {
+            "payee": {"value": "Tata Power"},
+            "amount": {"value": "₹2,000"},
+            "due_date": {"value": "2026-11-20T00:00:00"},
+            "consumer_number": {"value": "1111100000"},
+        }
+    })
+    d_cn2 = await node_deduplicate({
+        "household_id": 1,
+        "extracted": {
+            "payee": {"value": "Tata Power"},
+            "amount": {"value": "₹2,000"},
+            "due_date": {"value": "2026-11-20T00:00:00"},
+            "consumer_number": {"value": "9999900000"},
+        }
+    })
+    assert d_cn1["dedupe_key"] != d_cn2["dedupe_key"], "Different consumer numbers must produce different dedupe keys"
+
+    # 3. Missing due date -> dedupe_key is None
+    d_no_due = await node_deduplicate({
+        "household_id": 1,
+        "extracted": {
+            "payee": {"value": "Tata Power"},
+            "amount": {"value": "₹2,000"},
+        }
+    })
+    assert d_no_due["dedupe_key"] is None
+    assert d_no_due["existing_task_id"] is None

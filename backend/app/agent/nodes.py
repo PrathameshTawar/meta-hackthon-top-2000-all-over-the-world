@@ -36,6 +36,21 @@ def to_amount(s) -> float | None:
     m = re.search(r"\d[\d,]*(?:\.\d+)?", norm(str(s)).translate(DEV_DIGITS))
     return float(m.group().replace(",", "")) if m else None
 
+
+def normalize_payee(payee: str) -> str:
+    if not payee:
+        return ""
+    payee_lower = payee.lower().strip()
+    for needle, std_name in KNOWN_PAYEES:
+        n_low = needle.lower()
+        if re.search(r"[a-z]", n_low):
+            if re.search(rf"\b{re.escape(n_low)}\b", payee_lower):
+                return std_name
+        else:
+            if n_low in payee_lower:
+                return std_name
+    return payee.strip()
+
 from app.agent.state import AgentState
 from app.config import settings
 from app.db.models import (
@@ -279,8 +294,18 @@ def _heuristic_extract(raw_text: str) -> dict:
 
     # 3. Payee Extraction
     for needle, std_name in KNOWN_PAYEES:
-        if needle.lower() in raw_text.lower():
-            idx = raw_text.lower().find(needle.lower())
+        n_low = needle.lower()
+        matched = False
+        if re.search(r"[a-z]", n_low):
+            m = re.search(rf"\b{re.escape(n_low)}\b", raw_text.lower())
+            if m:
+                matched = True
+                idx = m.start()
+        else:
+            if n_low in raw_text.lower():
+                matched = True
+                idx = raw_text.lower().find(n_low)
+        if matched:
             quote = raw_text[idx:idx + len(needle)]
             extracted["payee"] = {"value": std_name, "quote": quote}
             break
@@ -290,7 +315,17 @@ def _heuristic_extract(raw_text: str) -> dict:
         if len(first_line) > 3:
             extracted["payee"] = {"value": first_line, "quote": first_line}
 
-    # 4. Title Extraction
+    # 4. Consumer / Account / Policy Number Extraction
+    cn_match = re.search(r"(?:consumer|account|ca|policy|loan|खाते|ग्राहक|पॉलिसी)\s*(?:no\.?|num\.?|number|क्र\.?|क्रमांक)?[^\d\n]{0,10}(\d{5,16})", raw_text, re.IGNORECASE)
+    if cn_match:
+        extracted["consumer_number"] = {
+            "value": cn_match.group(1),
+            "quote": cn_match.group(0).strip(),
+        }
+    else:
+        extracted["consumer_number"] = {"value": None, "quote": None}
+
+    # 5. Title Extraction
     payee_val = extracted["payee"]["value"] or "Task"
     if "वीज" in raw_text or "electricity" in raw_text.lower() or "power" in raw_text.lower():
         title_quote = "वीज बिल" if "वीज बिल" in raw_text else ("Electricity Bill" if "Electricity" in raw_text else payee_val)
@@ -312,7 +347,7 @@ def _heuristic_extract(raw_text: str) -> dict:
         extracted["title"] = {"value": first_line or "Obligation", "quote": first_line}
 
     # Sanity check: Ensure quote is verbatim in raw_text
-    for k in ["amount", "due_date", "payee", "title"]:
+    for k in ["amount", "due_date", "payee", "consumer_number"]:
         q = extracted[k]["quote"]
         if q and q not in raw_text:
             extracted[k]["quote"] = None
@@ -789,14 +824,16 @@ Fields:
 - amount: formatted with currency (e.g., ₹1,840)
 - due_date: ISO 8601 date (YYYY-MM-DD)
 - payee: organisation / utility / bank name
+- consumer_number: consumer / account / policy / loan number
 - title: concise task title (summary, does not need a quote)
 
 Return ONLY valid JSON in this exact structure:
 {{
-  "amount":   {{"value": "...", "quote": "..."}},
-  "due_date": {{"value": "...", "quote": "..."}},
-  "payee":    {{"value": "...", "quote": "..."}},
-  "title":    {{"value": "..."}}
+  "amount":          {{"value": "...", "quote": "..."}},
+  "due_date":        {{"value": "...", "quote": "..."}},
+  "payee":           {{"value": "...", "quote": "..."}},
+  "consumer_number": {{"value": "...", "quote": "..."}},
+  "title":           {{"value": "..."}}
 }}
 
 Text:
@@ -811,7 +848,7 @@ Text:
                 match = re.search(r"\{.*\}", llm_resp, re.DOTALL)
                 if match:
                     parsed = json.loads(match.group())
-                    for k in ["amount", "due_date", "payee"]:
+                    for k in ["amount", "due_date", "payee", "consumer_number"]:
                         if k in parsed and isinstance(parsed[k], dict):
                             q = parsed[k].get("quote")
                             if q and norm(q) not in norm(raw_text):
@@ -987,7 +1024,7 @@ async def node_verify(state: AgentState) -> dict:
 
 async def node_deduplicate(state: AgentState) -> dict:
     """
-    Match on payee + amount + due_date_month.
+    Match on payee + amount + due_date_month (or consumer_number + due_month).
     If matching task exists, merge evidence instead of creating a new task.
     """
     extracted = state.get("extracted", {})
@@ -995,30 +1032,21 @@ async def node_deduplicate(state: AgentState) -> dict:
     amount = (extracted.get("amount") or {}).get("value") or ""
     due_date_raw = (extracted.get("due_date") or {}).get("value") or ""
 
-    amount_norm = re.sub(r"[^\d]", "", amount)
-    due_month = due_date_raw[:7] if len(due_date_raw) >= 7 else due_date_raw
+    due_month = due_date_raw[:7] if len(due_date_raw) >= 7 and re.match(r"^\d{4}-\d{2}", due_date_raw) else None
 
-    payee_lower = payee.lower()
-    if any(w in payee_lower for w in ["msedcl", "mahavitaran", "महावितरण", "mseb"]):
-        payee_norm = "msedcl"
-    elif any(w in payee_lower for w in ["star health", "स्टार हेल्थ"]):
-        payee_norm = "starhealth"
-    elif any(w in payee_lower for w in ["hdfc", "एचडीएफसी", "credila"]):
-        payee_norm = "hdfc"
-    elif any(w in payee_lower for w in ["mahanagar", "महानगर", "mgl"]):
-        payee_norm = "mgl"
-    elif any(w in payee_lower for w in ["tata power", "टाटा पॉवर"]):
-        payee_norm = "tatapower"
-    elif any(w in payee_lower for w in ["sbi", "एसबीआय", "pension"]):
-        payee_norm = "sbipension"
-    elif any(w in payee_lower for w in ["sahyadri", "सह्याद्री"]):
-        payee_norm = "sahyadri"
-    elif any(w in payee_lower for w in ["lic", "एलआयसी"]):
-        payee_norm = "lic"
+    if not due_month:
+        return {"existing_task_id": None, "dedupe_key": None}
+
+    canonical_payee = normalize_payee(payee)
+    cn_val = (extracted.get("consumer_number") or {}).get("value")
+    cn_digits = re.sub(r"[^\d]", "", str(cn_val)) if cn_val else ""
+
+    if cn_digits:
+        key_str = f"cn|{canonical_payee}|{cn_digits}|{due_month}"
     else:
-        payee_norm = re.sub(r"[^\w]", "", payee_lower)[:10]
+        amt = int(to_amount(amount) or 0)
+        key_str = f"fb|{canonical_payee}|{amt}|{due_month}"
 
-    key_str = f"{payee_norm}|{amount_norm}|{due_month}"
     dedupe_key = hashlib.sha256(key_str.encode()).hexdigest()[:16]
 
     async with AsyncSessionLocal() as db:
