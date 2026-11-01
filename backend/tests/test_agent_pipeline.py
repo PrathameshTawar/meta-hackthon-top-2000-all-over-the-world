@@ -208,7 +208,7 @@ async def test_langgraph_persistent_interrupt_and_resume():
             question = step["__interrupt__"][0].value
 
     assert interrupted is True
-    assert "पुष्टी करा" in str(question)
+    assert "check:" in str(question).lower()
 
     # State must be paused at interrupt
     state_paused = await graph.aget_state(config)
@@ -402,3 +402,34 @@ async def test_p0_1_stop_graph_on_failed_perception_and_empty_extraction(monkeyp
         assert interrupted_2 is False
         assert final_output_2 is not None
         assert "extract" in final_output_2
+
+
+
+# ---------------------------------------------------------------------------
+# P0-2 Tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_p0_2_confirmation_question_formatting():
+    from app.agent.nodes import node_verify
+
+    state: AgentState = {
+        "raw_text": "MSEDCL Electricity Bill Due 2026-11-20 Amount ₹1,840",
+        "extracted": {
+            "payee": {"value": "MSEDCL", "quote": "MSEDCL"},
+            "amount": {"value": "₹1,840", "quote": "Amount ₹1,500"},  # amount mismatch
+            "due_date": {"value": "2026-11-20T00:00:00", "quote": "2026-11-20"},
+        },
+        "confidence": 0.8,
+    }
+    v_res = await node_verify(state)
+    assert v_res["verify_passed"] is False
+    q = v_res["confirmation_question"]
+    assert "MSEDCL" in q
+    assert "₹1,840" in q
+    assert len(q) <= 60
+    reasons = v_res.get("confirmation_reasons", [])
+    assert len(reasons) > 0
+    for r in reasons:
+        assert "digits" not in r
+        assert "quote" not in r

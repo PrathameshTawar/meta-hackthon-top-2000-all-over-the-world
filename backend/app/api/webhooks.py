@@ -383,6 +383,13 @@ async def _run_agent(artifact_id: int, household_id: int, artifact_type: str, fi
 
         # If interrupted: route confirmation question to the category-owner sibling, not the elderly parent
         if interrupted_question:
+            reasons = []
+            try:
+                state_snapshot = await graph.aget_state(config)
+                if state_snapshot and state_snapshot.values:
+                    reasons = state_snapshot.values.get("confirmation_reasons") or []
+            except Exception as e:
+                logger.warning(f"Failed to fetch state snapshot for reasons: {e}")
             async with AsyncSessionLocal() as db:
                 children_res = await db.execute(
                     select(Member).where(
@@ -434,9 +441,16 @@ async def _run_agent(artifact_id: int, household_id: int, artifact_type: str, fi
                     await _send_whatsapp_message(chat_id, parent_reassurance)
 
             # Route confirmation buttons to target sibling
-            confirm_text = (
-                f"❓ *Please verify extracted details for family board*:\n{interrupted_question}"
-            )
+            if reasons:
+                reasons_text = "\n".join(f"• {r}" for r in reasons)
+                confirm_text = (
+                    f"❓ *Please verify extracted details for family board*:\n{interrupted_question}\n\n"
+                    f"*Why verification is needed*:\n{reasons_text}"
+                )
+            else:
+                confirm_text = (
+                    f"❓ *Please verify extracted details for family board*:\n{interrupted_question}"
+                )
             tg_reply_markup = {
                 "inline_keyboard": [
                     [

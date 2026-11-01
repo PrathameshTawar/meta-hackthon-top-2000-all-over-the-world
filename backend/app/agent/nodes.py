@@ -797,6 +797,41 @@ Text:
 # Node 6: Verify (Code-Based Verification & Date Check)
 # ---------------------------------------------------------------------------
 
+
+def _confirmation_question(extracted: dict) -> str:
+    """Format a succinct confirmation question <= 60 chars for templates and interactive messages."""
+    def v(k):
+        val = ((extracted.get(k) or {}).get("value"))
+        return str(val) if val is not None else "?"
+    summary = f"{v('payee')} | {v('amount')} | due {str(v('due_date'))[:10]}"
+    q = f"Please check: {summary}. Is this right?"
+    if len(q) > 60:
+        q = f"Check: {summary}. Is this right?"
+    if len(q) > 60:
+        max_summary_len = 60 - len("Check: . Is this right?")
+        q = f"Check: {summary[:max_summary_len]}. Is this right?"
+    return q
+
+
+def _humanize_failure(failure: str) -> str:
+    """Turn technical verifier failure messages into plain English for humans."""
+    if "quote not found verbatim" in failure:
+        field = failure.split(":")[0].strip()
+        return f"couldn't find {field} on the document"
+    if "in the past" in failure:
+        m = re.search(r"due_date\s+['\"]?([^'\"]+)['\"]?\s+is in the past", failure)
+        val = m.group(1) if m else "specified"
+        return f"the due date {val} has already passed"
+    if "not a valid ISO date" in failure:
+        m = re.search(r"due_date\s+['\"]?([^'\"]+)['\"]?\s+is not a valid ISO date", failure)
+        val = m.group(1) if m else "specified"
+        return f"the due date {val} is not a valid date"
+    if "amount digits" in failure or "not in quote" in failure:
+        return "the amount doesn't match the document"
+    cleaned = re.sub(r"\b(quote|verbatim|digits|ISO)\b", "", failure, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned or "some extracted details need verification"
+
 async def node_verify(state: AgentState) -> dict:
     """
     Code-based verification checks (no LLM hallucinations):
@@ -855,19 +890,24 @@ async def node_verify(state: AgentState) -> dict:
     )
 
     if not verify_passed:
-        question = (
-            "काही माहिती अस्पष्ट आहे. कृपया पुष्टी करा:\n"
-            + "\n".join(f"- {f}" for f in failures)
-            + "\n(होय / नाही असे उत्तर द्या)"
-        )
+        question = _confirmation_question(extracted)
+        reasons = [_humanize_failure(f) for f in failures]
+        if not reasons and confidence < 0.5:
+            reasons = ["the document text confidence is low"]
         return {
             "verify_passed": False,
             "verify_failures": failures,
+            "confirmation_reasons": reasons,
             "awaiting_confirmation": True,
             "confirmation_question": question,
         }
 
-    return {"verify_passed": True, "verify_failures": [], "awaiting_confirmation": False}
+    return {
+        "verify_passed": True,
+        "verify_failures": [],
+        "confirmation_reasons": [],
+        "awaiting_confirmation": False,
+    }
 
 
 # ---------------------------------------------------------------------------

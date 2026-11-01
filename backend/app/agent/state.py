@@ -32,6 +32,7 @@ class AgentState(TypedDict, total=False):
     # --- interrupt ---
     awaiting_confirmation: bool
     confirmation_question: str
+    confirmation_reasons: list[str]
     confirmation_confirmed: Optional[bool]
 
     # --- deduplicate ---
