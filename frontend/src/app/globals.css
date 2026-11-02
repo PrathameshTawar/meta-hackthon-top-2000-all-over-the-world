@@ -59,4 +59,24 @@
   .verbatim-box {
     @apply font-mono text-xs bg-amber-50/70 border border-amber-200/80 rounded-md p-2 text-amber-950 leading-relaxed;
   }
+
+  @keyframes shimmer-warm {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
+  .skeleton-warm {
+    background: linear-gradient(
+      90deg,
+      #F2EEE5 0%,
+      #FAF7F2 50%,
+      #F2EEE5 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer-warm 1.6s infinite ease-in-out;
+  }
 }

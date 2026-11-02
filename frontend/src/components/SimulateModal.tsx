@@ -76,6 +76,9 @@ export function SimulateModal({ householdId, isOpen, onClose }: SimulateModalPro
       queryClient.invalidateQueries({ queryKey: ["tasks", householdId] });
       queryClient.invalidateQueries({ queryKey: ["events", householdId] });
       queryClient.invalidateQueries({ queryKey: ["healthSummary", householdId] });
+      // Accelerated follow-up polls as agent finishes node execution
+      setTimeout(() => queryClient.invalidateQueries({ queryKey: ["tasks", householdId] }), 600);
+      setTimeout(() => queryClient.invalidateQueries({ queryKey: ["tasks", householdId] }), 1400);
       onClose();
     },
   });

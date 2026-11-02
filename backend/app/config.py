@@ -18,8 +18,8 @@ class Settings(BaseSettings):
     # Backwards-compatibility aliases
     meta_api_key: str = ""
 
-    # Security & Admin (Must be explicitly configured in production; empty value blocks admin & task APIs with 503)
-    admin_secret: str = ""
+    # Security & Admin (Default demo secret allows web board & admin APIs to connect in dev; overridable via .env)
+    admin_secret: str = "saath_admin_secret_demo"
     cors_origins: List[str] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",

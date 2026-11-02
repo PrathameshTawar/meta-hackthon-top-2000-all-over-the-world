@@ -76,10 +76,10 @@ export function AuditLogModal({ householdId, isOpen, onClose }: AuditLogModalPro
                   isGuardrail
                     ? "bg-sindoor-50/80 border-sindoor-200 text-sindoor-900"
                     : isEscalation
-                    ? "bg-ochre-50/80 border-ochre-200 text-ochre-900"
-                    : isVerified
-                    ? "bg-sage-50/80 border-sage-200 text-sage-900"
-                    : "bg-white border-khata-subtle text-khata-ink"
+                      ? "bg-ochre-50/80 border-ochre-200 text-ochre-900"
+                      : isVerified
+                        ? "bg-sage-50/80 border-sage-200 text-sage-900"
+                        : "bg-white border-khata-subtle text-khata-ink"
                 )}
               >
                 <div className="flex items-center justify-between gap-2 mb-1.5">

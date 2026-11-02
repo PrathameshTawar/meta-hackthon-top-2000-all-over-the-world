@@ -10,6 +10,7 @@ import { MonthCommitmentBar } from "./MonthCommitmentBar";
 import { AuditLogModal } from "./AuditLogModal";
 import { SimulateModal } from "./SimulateModal";
 import { HealthPanel } from "./HealthPanel";
+import { BoardSkeleton } from "./BoardSkeleton";
 import { FastForward, Sparkles, Activity, RotateCcw, AlertTriangle, CheckCircle2, HeartPulse, CheckSquare } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
@@ -33,7 +34,7 @@ export function Board({ householdId }: BoardProps) {
   const [isSimulateOpen, setIsSimulateOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const { data: tasks = [], isLoading: tasksLoading } = useQuery({
+  const { data: tasks = [], isLoading: tasksLoading, isError: tasksError } = useQuery({
     queryKey: ["tasks", householdId],
     queryFn: () => getTasks(householdId),
     refetchInterval: 3000, // 3s polling as spec in saath.md
@@ -66,9 +67,25 @@ export function Board({ householdId }: BoardProps) {
   });
 
   if (tasksLoading && tasks.length === 0) {
+    return <BoardSkeleton />;
+  }
+
+  if (tasksError && tasks.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-400">
-        {t("loading")}
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-65px)] bg-khata-canvas p-6 text-center space-y-3">
+        <div className="w-12 h-12 rounded-xl bg-sindoor-100 text-sindoor-700 flex items-center justify-center font-bold text-lg border border-sindoor-200">
+          !
+        </div>
+        <h3 className="text-sm font-bold text-khata-ink">Unable to Load Family Ledger</h3>
+        <p className="text-xs text-khata-muted max-w-sm">
+          Backend server connection check failed. Ensure the FastAPI backend is running on port 8000.
+        </p>
+        <button
+          onClick={() => queryClient.invalidateQueries({ queryKey: ["tasks", householdId] })}
+          className="mt-2 px-4 py-2 bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white rounded-lg text-xs font-bold shadow-2xs cursor-pointer"
+        >
+          Retry Connection
+        </button>
       </div>
     );
   }
