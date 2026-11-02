@@ -1,5 +1,6 @@
 # Saath (साथ) — Family Coordination Agent
 
+> *"Saath: your parents' bills and care, handled together."*  
 > **Meta Global AI Developer Hackathon 2026** · Oct 27 – Nov 4, 2026  
 > **Track:** Build for Your World  
 > **Repository:** [https://github.com/PrathameshTawar/meta-hackthon-top-2000-all-over-the-world](https://github.com/PrathameshTawar/meta-hackthon-top-2000-all-over-the-world)  
@@ -242,6 +243,62 @@ The Health module extends Saath to assist adult children with their parents' dai
 
 ---
 
+## Internationalization & Judge Friendliness (Task I-1)
+
+Saath is built for non-English-literate Indian parents while ensuring global hackathon judges can immediately evaluate and interact with the application.
+
+### 1. English Board by Default + 1-Click Language Switcher
+- The Web Board defaults to **English** for international judges, with an instant header switcher between **English**, **मराठी (Marathi)**, and **हिंदी (Hindi)**.
+- Switching language updates all column headers, action buttons, status pills, and medical disclaimers in real-time.
+- State is preserved across sessions via `localStorage` sync.
+
+### 2. Verbatim Evidence Translation Toggle
+- Authentic Marathi and Hindi bills contain regional vocabulary (e.g. *"महावितरण वीज देयक"*, *"एकूण देय रक्कम: ₹१,८४०"*).
+- Under each extracted field in the **Task Detail** drawer, judges can click **"🌐 Translate to English"** to view high-fidelity English translations side-by-side with the verbatim original quote.
+- Clicking **"↩ Show Original"** toggles back instantly.
+
+### 3. Per-Member Language Preference & Clean Single-Script Buttons
+- Each family member has a stored `language` preference (`Member.language`: `mr`, `hi`, `en`).
+- **No mixed bilingual slash labels:** Sibling notifications use clean single-script buttons according to their set preference:
+  - **English:** `Claim Task`, `Mark Done`, `Correct`, `Wrong`
+  - **Marathi:** `मी करतो`, `पूर्ण झाले`, `बरोबर`, `नाही`
+  - **Hindi:** `मैं करता हूँ`, `पूर्ण हुआ`, `सही`, `गलत`
+- Adult siblings (Rohan, Priya) default to English, while parents (Baba, Aai) default to Marathi.
+
+### 4. Chat Language Switcher Command
+- Family members can change their preferred communication language at any time directly on WhatsApp or Telegram by messaging `"language"`, `"भाषा"`, or `"change language"`.
+- Saath immediately responds with interactive quick-reply buttons (`मराठी`, `हिंदी`, `English`) and updates the member's database record upon selection.
+
+### 5. Sample Test Bills for Hackathon Judges
+
+Judges can test the live agent simulation modal (`Try Live Agent` on the board) with these authentic sample bills:
+
+#### Sample A: Marathi Utility Bill (MSEDCL / Mahavitaran)
+```text
+महाराष्ट्र राज्य विद्युत वितरण कंपनी मर्यादित (महावितरण)
+ग्राहक नाव: विलास तावरे
+ग्राहक क्रमांक: ०२८५१०१२४५६७
+देयक दिनांक: ०१/११/२०२६
+देय दिनांक (Due Date): १५/११/२०२६
+एकूण देय रक्कम (Net Payable): ₹१,८४०
+पत्ता: ४२, गणेश नगर, पुणे ४११०३८
+```
+*Expected Extraction:* Payee: `Mahavitaran (MSEB)`, Amount: `1840`, Due Date: `15/11/2026`, Category: `utility`.
+
+#### Sample B: English Hospital & Pharmacy Bill (Sahyadri Hospitals)
+```text
+SAHYADRI SUPER SPECIALITY HOSPITALS
+Bill To: Vilas Taware | Age: 68 | UHID: SY-2026-9921
+Date of Admission: 28/10/2026 | Bill Date: 02/11/2026
+Description: Post-Op Physiotherapy & Pharmacy Disposables
+Total Amount Due: Rs. 4,500.00
+Payment Due Date: 10/11/2026
+Payment Mode: UPI / Cash / Card
+```
+*Expected Extraction:* Payee: `Sahyadri Hospitals`, Amount: `4500`, Due Date: `10/11/2026`, Category: `medical`.
+
+---
+
 ## Meta WhatsApp Message Templates Setup
 
 To reproduce the WhatsApp notifications in Meta Business Manager / WhatsApp Manager, create and submit these 7 message templates:
@@ -251,7 +308,7 @@ To reproduce the WhatsApp notifications in Meta Business Manager / WhatsApp Mana
 | `saath_new_task` | UTILITY | English (US) (`en_US`) | `New family task: {{1}}. Action required: {{2}}. View board to coordinate.` | Quick Reply: `Claim Task` (payload: `claim:<task_id>`) |
 | `saath_task_escalation` | UTILITY | English (US) (`en_US`) | `Urgent family reminder: {{1}} is due in {{2}} and is still unclaimed. Please claim and settle.` | Quick Reply: `Claim Task` (payload: `claim:<task_id>`) |
 | `saath_task_done` | UTILITY | Marathi (`mr`) | `नमस्कार! आनंदाची बातमी: तुमचे हे काम पूर्ण झाले आहे: {{1}}. पूर्ण करणारा: {{2}}. काळजी करू नका, सर्व वेळेवर झाले आहे!` | None (Informational loop closure) |
-| `saath_please_check` | UTILITY | English (US) (`en_US`) | `Please check extracted obligation details: {{1}}. Is this accurate?` | Button 0: `Correct (होय)` (`confirm_yes:<artifact_id>`), Button 1: `Wrong (नाही)` (`confirm_no:<artifact_id>`) |
+| `saath_please_check` | UTILITY | English (US) (`en_US`) | `Please check extracted obligation details: {{1}}. Is this accurate?` | Button 0: `Correct` (`confirm_yes:<artifact_id>`), Button 1: `Wrong` (`confirm_no:<artifact_id>`) |
 | `saath_med_reminder` | UTILITY | Marathi (`mr`) | `नमस्कार {{1}}, {{2}} घेण्याची वेळ झाली आहे. घेतल्यावर खालील बटण दाबा.` | Quick Reply: `घेतली ✅` (payload: `dose_taken:<id>`) |
 | `saath_dose_missed` | UTILITY | English (US) (`en_US`) | `{{1}} has not confirmed taking {{2}} (scheduled {{3}}). Please check in with them.` | None |
 | `saath_vital_alert` | UTILITY | English (US) (`en_US`) | `{{1}} reported {{2}} at {{3}}, beyond the limit your family set ({{4}}). Please check in.` | None |
