@@ -3,40 +3,55 @@
 import { type Task, type Member } from "@/lib/api";
 import { format, parseISO, isPast } from "date-fns";
 import clsx from "clsx";
-import { AlertCircle, Calendar, IndianRupee, Paperclip } from "lucide-react";
+import { AlertTriangle, Calendar, IndianRupee, FileText, CheckCircle2 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
-const CATEGORY_LABELS: Record<string, string> = {
-  bill:        "Bill",
-  loan_emi:    "Loan EMI",
-  pension:     "Pension",
-  govt_letter: "Govt Letter",
-  insurance:   "Insurance",
-  appointment: "Appointment",
-  medical:     "Medical",
-  chit_chat:   "Chit-chat",
-  unknown:     "Unknown",
-};
-
-const CATEGORY_COLORS: Record<string, string> = {
-  bill:        "bg-orange-100 text-orange-700",
-  loan_emi:    "bg-red-100 text-red-700",
-  pension:     "bg-teal-100 text-teal-700",
-  govt_letter: "bg-slate-100 text-slate-700",
-  insurance:   "bg-indigo-100 text-indigo-700",
-  appointment: "bg-sky-100 text-sky-700",
-  medical:     "bg-rose-100 text-rose-700",
-  chit_chat:   "bg-gray-100 text-gray-600",
-  unknown:     "bg-gray-100 text-gray-500",
-};
-
-const STATUS_DOT: Record<string, string> = {
-  new:          "bg-blue-400",
-  confirmed:    "bg-blue-400",
-  needs_review: "bg-yellow-400",
-  claimed:      "bg-purple-400",
-  done:         "bg-green-400",
-  escalated:    "bg-red-500",
+const CATEGORY_STYLES: Record<string, { label: string; badge: string; rail: string }> = {
+  bill: {
+    label: "Utility Bill",
+    badge: "bg-amber-100/80 text-amber-900 border-amber-200",
+    rail: "border-l-amber-600",
+  },
+  loan_emi: {
+    label: "Loan EMI",
+    badge: "bg-rose-100/80 text-rose-900 border-rose-200",
+    rail: "border-l-rose-600",
+  },
+  pension: {
+    label: "Pension",
+    badge: "bg-teal-100/80 text-teal-900 border-teal-200",
+    rail: "border-l-teal-600",
+  },
+  govt_letter: {
+    label: "Govt Notice",
+    badge: "bg-slate-100 text-slate-800 border-slate-200",
+    rail: "border-l-slate-600",
+  },
+  insurance: {
+    label: "Insurance",
+    badge: "bg-sky-100/80 text-sky-900 border-sky-200",
+    rail: "border-l-sky-600",
+  },
+  appointment: {
+    label: "Appointment",
+    badge: "bg-indigo-100/80 text-indigo-900 border-indigo-200",
+    rail: "border-l-indigo-600",
+  },
+  medical: {
+    label: "Medical Care",
+    badge: "bg-red-100/80 text-red-900 border-red-200",
+    rail: "border-l-red-600",
+  },
+  chit_chat: {
+    label: "Note",
+    badge: "bg-stone-100 text-stone-700 border-stone-200",
+    rail: "border-l-stone-400",
+  },
+  unknown: {
+    label: "General",
+    badge: "bg-stone-100 text-stone-700 border-stone-200",
+    rail: "border-l-stone-400",
+  },
 };
 
 interface TaskCardProps {
@@ -52,95 +67,103 @@ export function TaskCard({ task, members, isSelected, onClick }: TaskCardProps) 
   const dueDate = task.due_date ? parseISO(task.due_date) : null;
   const overdue = dueDate ? isPast(dueDate) && task.status !== "done" : false;
   const hasEvidence = task.evidence_items.length > 0;
+  const style = CATEGORY_STYLES[task.category] ?? CATEGORY_STYLES.unknown;
 
   return (
     <button
       onClick={onClick}
       className={clsx(
-        "task-card w-full text-left transition-all",
-        isSelected && "ring-2 ring-brand-500",
-        task.status === "escalated" && "border-red-400 bg-red-50/30 ring-1 ring-red-400/50 shadow-xs",
-        overdue && task.status !== "escalated" && "border-red-300"
+        "task-card w-full text-left transition-all border-l-[3px]",
+        style.rail,
+        isSelected && "ring-2 ring-brand-500 border-brand-500 shadow-md",
+        task.status === "escalated" && "border-sindoor-600 bg-sindoor-50/40 ring-1 ring-sindoor-600/40",
+        overdue && task.status !== "escalated" && "border-sindoor-400"
       )}
     >
-      {/* Header row */}
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <span
-          className={clsx(
-            "badge",
-            CATEGORY_COLORS[task.category] ?? CATEGORY_COLORS.unknown
-          )}
-        >
-          {CATEGORY_LABELS[task.category] ?? task.category}
+      {/* Header Row: Category Badge & Due Date Pill */}
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <span className={clsx("text-[10px] font-semibold px-2 py-0.5 rounded border tracking-tight", style.badge)}>
+          {style.label}
         </span>
-        <span
-          className={clsx(
-            "w-2 h-2 rounded-full mt-1 flex-shrink-0",
-            STATUS_DOT[task.status] ?? "bg-gray-300"
-          )}
-        />
-      </div>
 
-      {/* Title */}
-      <p className="text-sm font-medium text-gray-800 leading-snug mb-2 line-clamp-2">
-        {task.title}
-      </p>
-
-      {/* Meta row */}
-      <div className="flex items-center gap-3 text-xs text-gray-500 flex-wrap">
-        {task.amount && (
-          <span className="flex items-center gap-0.5">
-            <IndianRupee size={11} />
-            {task.amount}
-          </span>
-        )}
         {dueDate && (
           <span
             className={clsx(
-              "flex items-center gap-0.5",
-              overdue && "text-red-500 font-medium"
+              "text-[10px] font-mono font-medium flex items-center gap-1",
+              overdue ? "text-sindoor-700 font-bold" : "text-khata-muted"
             )}
           >
-            <Calendar size={11} />
+            <Calendar size={10} className={overdue ? "text-sindoor-600" : "text-khata-muted"} />
             {format(dueDate, "dd MMM")}
-            {overdue && " ⚠"}
-          </span>
-        )}
-        {hasEvidence && (
-          <span className="flex items-center gap-0.5">
-            <Paperclip size={11} />
-            {task.evidence_items.length}
-          </span>
-        )}
-        {task.status === "needs_review" && (
-          <span className="flex items-center gap-0.5 text-yellow-600 font-medium">
-            <AlertCircle size={11} />
-            {t("review")}
-          </span>
-        )}
-        {task.status === "escalated" && (
-          <span className="flex items-center gap-0.5 text-red-600 font-bold bg-red-100 px-1.5 py-0.5 rounded text-[10px]">
-            <AlertCircle size={10} />
-            {t("escalated")}
+            {overdue && " ⚠️"}
           </span>
         )}
       </div>
 
-      {/* Assignee chip */}
-      {assignee && (
-        <div className="mt-2.5 flex items-center gap-1.5">
-          <div className="w-5 h-5 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 text-[10px] font-bold">
-            {assignee.name[0].toUpperCase()}
+      {/* Title */}
+      <h4 className="text-xs font-semibold text-khata-ink leading-snug mb-2 line-clamp-2">
+        {task.title}
+      </h4>
+
+      {/* Payee / Organisation */}
+      {task.payee && (
+        <p className="text-[11px] text-khata-muted mb-2 font-medium truncate">
+          {task.payee}
+        </p>
+      )}
+
+      {/* Footer: Amount & Assignee / Evidence Provenance */}
+      <div className="flex items-center justify-between pt-2 border-t border-khata-subtle/60 mt-1">
+        {/* Amount */}
+        {task.amount ? (
+          <div className="flex items-baseline font-mono font-bold text-xs text-khata-ink tabular-nums">
+            <span className="text-brand-600 mr-0.5">₹</span>
+            {task.amount.replace(/[^\d,.]/g, "")}
           </div>
-          <span className="text-xs text-gray-500">{assignee.name}</span>
+        ) : (
+          <span className="text-[10px] font-mono text-khata-muted italic">Non-monetary</span>
+        )}
+
+        {/* Right side: Assignee or Evidence tag */}
+        <div className="flex items-center gap-1.5">
+          {hasEvidence && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-mono bg-khata-raised text-khata-muted px-1.5 py-0.5 rounded border border-khata-subtle" title="Document evidence attached">
+              <FileText size={10} />
+              {task.evidence_items.length}
+            </span>
+          )}
+
+          {assignee ? (
+            <div className="flex items-center gap-1 bg-brand-50 border border-brand-200/60 rounded px-1.5 py-0.5">
+              <div className="w-3.5 h-3.5 rounded-full bg-brand-500 text-white font-bold text-[8px] flex items-center justify-center">
+                {assignee.name[0].toUpperCase()}
+              </div>
+              <span className="text-[10px] font-medium text-brand-900">{assignee.name.split(" ")[0]}</span>
+            </div>
+          ) : (
+            task.status === "done" && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700">
+                <CheckCircle2 size={11} />
+                Settled
+              </span>
+            )
+          )}
+        </div>
+      </div>
+
+      {/* Escalated / Review Alerts */}
+      {task.status === "escalated" && (
+        <div className="mt-2 text-[10px] font-bold text-sindoor-800 bg-sindoor-100/90 border border-sindoor-300 rounded px-2 py-0.5 flex items-center gap-1">
+          <AlertTriangle size={10} className="text-sindoor-600" />
+          {t("escalated")} · Approaching Due Date
         </div>
       )}
 
-      {/* Low confidence warning */}
-      {task.confidence !== null && task.confidence < 0.6 && (
-        <p className="mt-2 text-[10px] text-yellow-600 bg-yellow-50 rounded px-1.5 py-0.5">
+      {task.confidence !== null && task.confidence < 0.6 && task.status !== "escalated" && (
+        <div className="mt-2 text-[10px] font-medium text-ochre-900 bg-ochre-100/80 border border-ochre-200 rounded px-2 py-0.5 flex items-center gap-1">
+          <AlertTriangle size={10} className="text-ochre-700" />
           {t("low_confidence", { percent: Math.round((task.confidence ?? 0) * 100) })}
-        </p>
+        </div>
       )}
     </button>
   );

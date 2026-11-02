@@ -1,7 +1,7 @@
 "use client";
 
 import { type Member, type Task } from "@/lib/api";
-import clsx from "clsx";
+import { User } from "lucide-react";
 
 interface MembersBarProps {
   members: Member[];
@@ -14,9 +14,9 @@ export function MembersBar({ members, tasks }: MembersBarProps) {
   if (children.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-4 overflow-x-auto py-1">
-      <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">
-        Family:
+    <div className="flex items-center gap-3 overflow-x-auto py-1">
+      <span className="text-[10px] font-mono uppercase tracking-wider text-khata-muted font-semibold whitespace-nowrap">
+        Siblings:
       </span>
       {children.map((m) => {
         const assigned = tasks.filter(
@@ -31,18 +31,21 @@ export function MembersBar({ members, tasks }: MembersBarProps) {
         ).length;
 
         return (
-          <div key={m.id} className="flex items-center gap-2 whitespace-nowrap">
-            <div className="w-7 h-7 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 font-bold text-xs flex-shrink-0">
+          <div
+            key={m.id}
+            className="flex items-center gap-2 bg-khata-raised border border-khata-subtle rounded-md px-2.5 py-1 whitespace-nowrap shadow-2xs"
+          >
+            <div className="w-5 h-5 rounded-full bg-brand-100 border border-brand-200/80 flex items-center justify-center text-brand-700 font-bold text-[10px] flex-shrink-0">
               {m.name[0].toUpperCase()}
             </div>
-            <div>
-              <p className="text-xs font-medium text-gray-700">{m.name}</p>
-              <p className="text-[10px] text-gray-400">
-                {assigned} open
+            <div className="leading-tight">
+              <span className="text-xs font-semibold text-khata-ink">{m.name}</span>
+              <span className="text-[10px] font-mono text-khata-muted ml-1.5">
+                {assigned} claimed
                 {overdue > 0 && (
-                  <span className="text-red-500 font-medium ml-1">· {overdue} overdue</span>
+                  <span className="text-sindoor-600 font-bold ml-1">· {overdue} due</span>
                 )}
-              </p>
+              </span>
             </div>
           </div>
         );

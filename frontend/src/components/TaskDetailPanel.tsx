@@ -39,11 +39,16 @@ export function TaskDetailPanel({ task, members, onClose }: TaskDetailPanelProps
   const activeEvidence = task.evidence_items.find((e) => e.field_name === activeField);
 
   return (
-    <aside className="w-[380px] flex-shrink-0 border-l border-gray-200 bg-white flex flex-col h-full overflow-hidden">
+    <aside className="w-[380px] flex-shrink-0 border-l border-khata-subtle bg-white flex flex-col h-full overflow-hidden shadow-sm">
       {/* Top bar */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-        <h2 className="text-sm font-semibold text-gray-800 line-clamp-1">{task.title}</h2>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-700 transition-colors">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-khata-subtle bg-khata-raised/50">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-md bg-brand-500/10 text-brand-600 flex items-center justify-center font-bold text-xs">
+            त
+          </div>
+          <h2 className="text-sm font-bold text-khata-ink line-clamp-1">{task.title}</h2>
+        </div>
+        <button onClick={onClose} className="p-1 rounded-md text-khata-muted hover:text-khata-ink hover:bg-khata-raised transition-colors cursor-pointer">
           <X size={18} />
         </button>
       </div>
@@ -51,7 +56,7 @@ export function TaskDetailPanel({ task, members, onClose }: TaskDetailPanelProps
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
         {/* Fields with evidence */}
         <section>
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-khata-muted mb-3">
             {t("extracted_fields")}
           </p>
           <div className="space-y-2">
@@ -68,22 +73,22 @@ export function TaskDetailPanel({ task, members, onClose }: TaskDetailPanelProps
                   key={field}
                   onClick={() => setActiveField(isActive ? null : field)}
                   className={clsx(
-                    "w-full text-left rounded-lg border px-3 py-2.5 transition-all",
+                    "w-full text-left rounded-lg border p-3 transition-all cursor-pointer shadow-2xs",
                     isActive
-                      ? "border-brand-500 bg-brand-50"
-                      : "border-gray-200 hover:border-gray-300 bg-white"
+                      ? "border-brand-500 bg-brand-50/60 ring-1 ring-brand-500/30"
+                      : "border-khata-subtle hover:border-khata-ink/30 bg-white"
                   )}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-gray-500">{t(`field_${field}`)}</span>
+                    <span className="text-[11px] font-semibold text-khata-muted uppercase tracking-wider">{t(`field_${field}`)}</span>
                     {evidence && (
-                      <span className="text-[10px] text-brand-600 font-medium">
+                      <span className="text-[10px] text-brand-600 font-semibold flex items-center gap-1">
                         {isActive ? t("hide_quote") : t("show_quote")}
                       </span>
                     )}
                   </div>
-                  <p className="text-sm font-medium text-gray-800 mt-0.5">
-                    {value ?? <span className="text-gray-400 font-normal italic">{t("not_found")}</span>}
+                  <p className="text-sm font-bold text-khata-ink mt-1 font-mono">
+                    {value ?? <span className="text-khata-muted font-normal italic font-sans">{t("not_found")}</span>}
                   </p>
                 </button>
               );
@@ -102,20 +107,20 @@ export function TaskDetailPanel({ task, members, onClose }: TaskDetailPanelProps
         {/* All evidence list */}
         {task.evidence_items.length > 0 && (
           <section>
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-khata-muted mb-3">
               {t("all_evidence", { count: task.evidence_items.length })}
             </p>
             <div className="space-y-2">
               {task.evidence_items.map((ev) => (
                 <div
                   key={ev.id}
-                  className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2"
+                  className="rounded-lg bg-khata-raised/60 border border-khata-subtle p-3 shadow-2xs"
                 >
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-gray-400">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-khata-muted">
                     {t(`field_${ev.field_name}`)}
                   </span>
-                  <p className="text-xs text-gray-700 mt-0.5 font-mono leading-relaxed">
-                    "…{ev.quoted_span}…"
+                  <p className="verbatim-box text-xs text-khata-ink mt-1 font-mono leading-relaxed">
+                    &ldquo;…{ev.quoted_span}…&rdquo;
                   </p>
                 </div>
               ))}
@@ -125,40 +130,42 @@ export function TaskDetailPanel({ task, members, onClose }: TaskDetailPanelProps
 
         {/* Assignee */}
         <section>
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-khata-muted mb-2">
             {t("assigned_to")}
           </p>
           {assignee ? (
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 font-bold text-xs">
+            <div className="flex items-center gap-2.5 p-2 rounded-lg bg-khata-raised/40 border border-khata-subtle">
+              <div className="w-7 h-7 rounded-full bg-brand-500 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
                 {assignee.name[0].toUpperCase()}
               </div>
-              <span className="text-sm text-gray-700">{assignee.name}</span>
-              <span className="text-xs text-gray-400 capitalize">({assignee.role})</span>
+              <div>
+                <span className="text-xs font-bold text-khata-ink">{assignee.name}</span>
+                <span className="text-[11px] text-khata-muted block capitalize font-medium">{assignee.role}</span>
+              </div>
             </div>
           ) : (
-            <span className="text-sm text-gray-400 italic">{t("unassigned")}</span>
+            <span className="text-xs text-khata-muted italic">{t("unassigned")}</span>
           )}
         </section>
 
         {/* Confidence */}
         {task.confidence !== null && (
           <section>
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-khata-muted mb-2">
               {t("agent_confidence")}
             </p>
             <div className="flex items-center gap-3">
-              <div className="flex-1 bg-gray-200 rounded-full h-1.5">
+              <div className="flex-1 bg-khata-raised rounded-full h-2 border border-khata-subtle overflow-hidden">
                 <div
                   className={clsx(
-                    "h-1.5 rounded-full",
-                    task.confidence >= 0.8 ? "bg-green-500" :
-                    task.confidence >= 0.6 ? "bg-yellow-400" : "bg-red-400"
+                    "h-full rounded-full transition-all duration-500",
+                    task.confidence >= 0.8 ? "bg-sage-600" :
+                    task.confidence >= 0.6 ? "bg-ochre-500" : "bg-sindoor-600"
                   )}
                   style={{ width: `${Math.round((task.confidence ?? 0) * 100)}%` }}
                 />
               </div>
-              <span className="text-xs text-gray-500 w-8">
+              <span className="text-xs font-mono font-bold text-khata-ink w-9 text-right">
                 {Math.round((task.confidence ?? 0) * 100)}%
               </span>
             </div>
@@ -167,12 +174,12 @@ export function TaskDetailPanel({ task, members, onClose }: TaskDetailPanelProps
       </div>
 
       {/* Actions */}
-      <div className="border-t border-gray-100 px-5 py-4 flex gap-2">
+      <div className="border-t border-khata-subtle px-5 py-4 flex gap-2 bg-khata-raised/30">
         {task.status !== "claimed" && task.status !== "done" && (
           <button
             onClick={() => claimMutation.mutate()}
             disabled={claimMutation.isPending}
-            className="btn-primary flex-1"
+            className="flex-1 bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white rounded-lg px-4 py-2.5 text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer active:scale-98 disabled:opacity-50"
           >
             {claimMutation.isPending ? t("claiming") : t("claim_task")}
           </button>
@@ -181,9 +188,9 @@ export function TaskDetailPanel({ task, members, onClose }: TaskDetailPanelProps
           <button
             onClick={() => doneMutation.mutate()}
             disabled={doneMutation.isPending}
-            className="flex-1 bg-green-600 hover:bg-green-700 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-1.5"
+            className="flex-1 bg-sage-600 hover:bg-sage-700 active:bg-sage-800 text-white rounded-lg px-4 py-2.5 text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer active:scale-98 disabled:opacity-50"
           >
-            <CheckCircle2 size={14} />
+            <CheckCircle2 size={15} />
             {doneMutation.isPending ? t("marking") : t("mark_done")}
           </button>
         )}

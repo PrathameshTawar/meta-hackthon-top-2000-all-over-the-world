@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { getEvents, EventItem } from "@/lib/api";
 import { format, parseISO } from "date-fns";
-import { X, ShieldCheck, Activity, Bot, AlertTriangle, RefreshCw } from "lucide-react";
+import { X, ShieldCheck, Activity, RefreshCw } from "lucide-react";
 import clsx from "clsx";
 
 interface AuditLogModalProps {
@@ -24,29 +24,29 @@ export function AuditLogModal({ householdId, isOpen, onClose }: AuditLogModalPro
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-gray-100">
+      <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-khata-subtle">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-khata-subtle bg-khata-raised/60">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600">
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700 shadow-2xs">
               <Activity size={18} />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-gray-900">Agent Decision Audit Log</h2>
-              <p className="text-xs text-gray-500">Append-only record of all perception, verification & guardrails</p>
+              <h2 className="text-base font-bold text-khata-ink">Agent Decision Audit Log</h2>
+              <p className="text-xs text-khata-muted font-medium">Append-only record of all perception, verification & guardrails</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => refetch()}
-              className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+              className="p-1.5 text-khata-muted hover:text-khata-ink rounded-lg hover:bg-white border border-transparent hover:border-khata-subtle transition-colors cursor-pointer"
               title="Refresh events"
             >
               <RefreshCw size={16} />
             </button>
             <button
               onClick={onClose}
-              className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+              className="p-1.5 text-khata-muted hover:text-khata-ink rounded-lg hover:bg-white border border-transparent hover:border-khata-subtle transition-colors cursor-pointer"
             >
               <X size={18} />
             </button>
@@ -54,13 +54,13 @@ export function AuditLogModal({ householdId, isOpen, onClose }: AuditLogModalPro
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-3">
+        <div className="flex-1 overflow-y-auto p-6 space-y-3 bg-khata-canvas/30">
           {isLoading && (
-            <div className="text-center py-8 text-gray-400 text-sm">Loading audit events…</div>
+            <div className="text-center py-8 text-khata-muted text-sm font-medium">Loading audit events…</div>
           )}
 
           {!isLoading && events.length === 0 && (
-            <div className="text-center py-8 text-gray-400 text-sm">No recorded events yet.</div>
+            <div className="text-center py-8 text-khata-muted text-sm font-medium">No recorded events yet.</div>
           )}
 
           {events.map((ev) => {
@@ -72,37 +72,37 @@ export function AuditLogModal({ householdId, isOpen, onClose }: AuditLogModalPro
               <div
                 key={ev.id}
                 className={clsx(
-                  "p-3.5 rounded-xl border transition-all text-xs",
+                  "p-3.5 rounded-xl border transition-all text-xs shadow-2xs",
                   isGuardrail
-                    ? "bg-rose-50/70 border-rose-200 text-rose-900"
+                    ? "bg-sindoor-50/80 border-sindoor-200 text-sindoor-900"
                     : isEscalation
-                    ? "bg-amber-50/70 border-amber-200 text-amber-900"
+                    ? "bg-ochre-50/80 border-ochre-200 text-ochre-900"
                     : isVerified
-                    ? "bg-emerald-50/70 border-emerald-200 text-emerald-900"
-                    : "bg-gray-50 border-gray-200 text-gray-800"
+                    ? "bg-sage-50/80 border-sage-200 text-sage-900"
+                    : "bg-white border-khata-subtle text-khata-ink"
                 )}
               >
                 <div className="flex items-center justify-between gap-2 mb-1.5">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono font-semibold uppercase tracking-wider text-[10px] px-2 py-0.5 rounded-md bg-white border border-gray-200">
+                    <span className="font-mono font-bold uppercase tracking-wider text-[10px] px-2 py-0.5 rounded-md bg-white border border-khata-subtle shadow-2xs">
                       {ev.actor}
                     </span>
-                    <span className="font-medium text-xs">
+                    <span className="font-bold text-xs">
                       {ev.action}
                       {ev.task_id ? ` · Task #${ev.task_id}` : ""}
                     </span>
                   </div>
-                  <span className="text-[10px] text-gray-400">
+                  <span className="text-[10px] font-mono text-khata-muted">
                     {format(parseISO(ev.created_at), "HH:mm:ss · dd MMM")}
                   </span>
                 </div>
 
                 {ev.reason && (
-                  <p className="font-medium text-gray-700 mb-1">{ev.reason}</p>
+                  <p className="font-medium text-khata-ink mb-1">{ev.reason}</p>
                 )}
 
                 {ev.payload && (
-                  <pre className="text-[10px] font-mono bg-white/80 p-2 rounded-md border border-gray-200/60 overflow-x-auto text-gray-600 mt-1.5">
+                  <pre className="text-[10px] font-mono bg-white/90 p-2.5 rounded-md border border-khata-subtle overflow-x-auto text-khata-ink mt-1.5 shadow-2xs">
                     {JSON.stringify(ev.payload, null, 2)}
                   </pre>
                 )}
@@ -112,12 +112,12 @@ export function AuditLogModal({ householdId, isOpen, onClose }: AuditLogModalPro
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between text-xs text-gray-500">
+        <div className="px-6 py-3 border-t border-khata-subtle bg-khata-raised/50 flex items-center justify-between text-xs text-khata-muted font-medium">
           <span className="flex items-center gap-1.5">
-            <ShieldCheck size={14} className="text-emerald-600" />
+            <ShieldCheck size={14} className="text-sage-700" />
             Meta LLM Hackathon Verification Audit Trail
           </span>
-          <span>{events.length} decisions logged</span>
+          <span className="font-mono">{events.length} decisions logged</span>
         </div>
       </div>
     </div>

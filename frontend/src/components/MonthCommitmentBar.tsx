@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { Task } from "@/lib/api";
-import { IndianRupee, TrendingUp, AlertTriangle, CalendarCheck2 } from "lucide-react";
+import { IndianRupee, Layers, Home, Briefcase, CheckCircle2 } from "lucide-react";
 
 interface MonthCommitmentBarProps {
   tasks: Task[];
@@ -38,42 +38,61 @@ export function MonthCommitmentBar({ tasks }: MonthCommitmentBarProps) {
   }, [tasks]);
 
   return (
-    <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-transparent border-b border-orange-200/60 px-6 py-3 flex flex-wrap items-center justify-between gap-4">
+    <div className="bg-white border-b border-khata-subtle px-6 py-2.5 flex flex-wrap items-center justify-between gap-4">
       <div className="flex items-center gap-6">
-        <div>
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 flex items-center gap-1">
-            <CalendarCheck2 size={12} />
-            Next 30 Days Total Commitment
-          </span>
-          <div className="flex items-baseline gap-1.5 mt-0.5">
-            <span className="text-xl font-bold text-gray-900 tracking-tight flex items-center">
-              <IndianRupee size={18} className="text-amber-600" />
-              {commitments.grandTotal.toLocaleString("en-IN")}
+        {/* Main Combined Metric */}
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-khata-raised border border-khata-subtle flex items-center justify-center text-brand-600">
+            <Layers size={17} />
+          </div>
+          <div>
+            <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-khata-muted block">
+              30-Day Family Commitment
             </span>
-            <span className="text-xs text-gray-500">across 2 households</span>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-xl font-bold text-khata-ink font-mono tabular-nums tracking-tight flex items-center">
+                <IndianRupee size={16} className="text-brand-600 -mr-0.5" />
+                {commitments.grandTotal.toLocaleString("en-IN")}
+              </span>
+              <span className="text-[11px] font-medium text-khata-muted">
+                across 2 households
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="hidden sm:flex items-center gap-2 border-l border-orange-200 pl-6">
-          <div className="bg-white/80 rounded-lg px-3 py-1.5 border border-orange-100 shadow-xs">
-            <span className="text-[10px] text-gray-500 block">Parents' Bills & Insurance</span>
-            <span className="text-xs font-semibold text-gray-800">
-              ₹{commitments.parentsTotal.toLocaleString("en-IN")}
-            </span>
+        {/* Dual-Household Breakdown Ledger Cards */}
+        <div className="hidden sm:flex items-center gap-2 border-l border-khata-subtle pl-6">
+          {/* Parents' Household */}
+          <div className="bg-khata-canvas rounded-lg px-3 py-1.5 border border-khata-subtle flex items-center gap-2.5">
+            <Home size={14} className="text-brand-500" />
+            <div>
+              <span className="text-[10px] text-khata-muted font-medium block">Parents' Bills & Care</span>
+              <span className="text-xs font-bold text-khata-ink font-mono tabular-nums">
+                ₹{commitments.parentsTotal.toLocaleString("en-IN")}
+              </span>
+            </div>
           </div>
 
-          <div className="bg-white/80 rounded-lg px-3 py-1.5 border border-orange-100 shadow-xs">
-            <span className="text-[10px] text-gray-500 block">Earner's Loan EMIs</span>
-            <span className="text-xs font-semibold text-rose-700">
-              ₹{commitments.loanEmiTotal.toLocaleString("en-IN")}
-            </span>
+          {/* Child's Commitments */}
+          <div className="bg-khata-canvas rounded-lg px-3 py-1.5 border border-khata-subtle flex items-center gap-2.5">
+            <Briefcase size={14} className="text-slate-600" />
+            <div>
+              <span className="text-[10px] text-khata-muted font-medium block">Earner's Loan EMIs</span>
+              <span className="text-xs font-bold text-khata-ink font-mono tabular-nums">
+                ₹{commitments.loanEmiTotal.toLocaleString("en-IN")}
+              </span>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="flex items-center gap-2 text-xs text-amber-900 bg-amber-100/70 border border-amber-200 rounded-full px-3 py-1">
-        <TrendingUp size={13} className="text-amber-700" />
-        <span>One phone, complete family cashflow clarity</span>
+      {/* Purpose Banner */}
+      <div className="hidden lg:flex items-center gap-2 text-xs text-khata-muted bg-khata-raised border border-khata-subtle rounded-md px-3 py-1">
+        <CheckCircle2 size={13} className="text-emerald-600" />
+        <span className="font-medium">
+          {commitments.pendingCount} active obligations · zero late penalties
+        </span>
       </div>
     </div>
   );

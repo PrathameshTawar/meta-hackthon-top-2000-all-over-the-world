@@ -150,53 +150,53 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
   const getMemberName = (id: number) => members.find((m) => m.id === id)?.name || `Member #${id}`;
 
   return (
-    <div className="flex-1 overflow-y-auto bg-slate-50/50 p-6 space-y-6">
+    <div className="flex-1 overflow-y-auto bg-khata-canvas p-6 space-y-6">
       {/* 1. Today's Medicines */}
-      <section className="bg-white rounded-2xl border border-gray-200 p-6 shadow-2xs">
+      <section className="bg-white rounded-2xl border border-khata-subtle p-6 shadow-2xs">
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-sage-100 text-sage-800 border border-sage-200 flex items-center justify-center shadow-2xs">
               <Pill size={18} />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-gray-900">{t("todays_medicines")}</h2>
-              <p className="text-xs text-gray-500">Live dose schedule & WhatsApp reminder status</p>
+              <h2 className="text-base font-bold text-khata-ink">{t("todays_medicines")}</h2>
+              <p className="text-xs text-khata-muted font-medium">Live dose schedule & WhatsApp reminder status</p>
             </div>
           </div>
-          <span className="text-xs text-gray-400">Live (5s poll)</span>
+          <span className="text-[11px] font-mono text-khata-muted bg-khata-raised border border-khata-subtle px-2 py-0.5 rounded-md">Live (5s poll)</span>
         </div>
 
         {doses.length === 0 ? (
-          <p className="text-xs text-gray-400 py-3 italic">No doses scheduled for today.</p>
+          <p className="text-xs text-khata-muted py-3 italic">No doses scheduled for today.</p>
         ) : (
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-khata-subtle">
             {doses.map((d) => {
               const timeStr = d.scheduled_for ? new Date(d.scheduled_for).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
               return (
                 <div key={d.id} className="py-3 flex items-center justify-between text-xs">
                   <div className="flex items-center gap-3">
-                    <span className="font-semibold text-gray-800">{d.member_name || "Parent"}</span>
-                    <span className="text-gray-400">•</span>
-                    <span className="text-gray-700 font-medium">{d.medication_name || "Medicine"}</span>
-                    <span className="text-gray-400">•</span>
-                    <span className="flex items-center gap-1 text-gray-500">
+                    <span className="font-bold text-khata-ink">{d.member_name || "Parent"}</span>
+                    <span className="text-khata-muted">•</span>
+                    <span className="text-khata-ink font-medium">{d.medication_name || "Medicine"}</span>
+                    <span className="text-khata-muted">•</span>
+                    <span className="flex items-center gap-1 text-khata-muted font-mono">
                       <Clock size={12} />
                       {timeStr}
                     </span>
                   </div>
                   <div>
                     {d.status === "taken" && (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold font-mono bg-sage-100 text-sage-800 border border-sage-200 shadow-2xs">
                         <CheckCircle2 size={12} /> taken ✅
                       </span>
                     )}
                     {d.status === "pending" && (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold font-mono bg-ochre-100 text-ochre-800 border border-ochre-200 shadow-2xs">
                         <Clock size={12} /> pending
                       </span>
                     )}
                     {d.status === "missed" && (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-red-100 text-red-800 border border-red-200">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold font-mono bg-sindoor-100 text-sindoor-800 border border-sindoor-200 shadow-2xs">
                         <AlertTriangle size={12} /> missed ⚠️ (escalated)
                       </span>
                     )}
@@ -209,19 +209,19 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
       </section>
 
       {/* 2. Readings & Charts (14 Days) */}
-      <section className="bg-white rounded-2xl border border-gray-200 p-6 shadow-2xs space-y-6">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center">
+      <section className="bg-white rounded-2xl border border-khata-subtle p-6 shadow-2xs space-y-6">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-sindoor-100 text-sindoor-700 border border-sindoor-200 flex items-center justify-center shadow-2xs">
             <HeartPulse size={18} />
           </div>
           <div>
-            <h2 className="text-base font-semibold text-gray-900">{t("vitals_14_days")}</h2>
-            <p className="text-xs text-gray-500">Reported via WhatsApp voice notes & messages with verbatim evidence</p>
+            <h2 className="text-base font-bold text-khata-ink">{t("vitals_14_days")}</h2>
+            <p className="text-xs text-khata-muted font-medium">Reported via WhatsApp voice notes & messages with verbatim evidence</p>
           </div>
         </div>
 
         {parents.length === 0 ? (
-          <p className="text-xs text-gray-400">No parents registered in household.</p>
+          <p className="text-xs text-khata-muted">No parents registered in household.</p>
         ) : (
           parents.map((parent) => {
             const pVitals = vitalsByParent[parent.id] || [];
@@ -229,29 +229,29 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
             const bpThreshold = thresholds.find((th) => th.member_id === parent.id && th.kind === "bp");
 
             return (
-              <div key={parent.id} className="border border-gray-100 rounded-xl p-5 bg-slate-50/40 space-y-4">
+              <div key={parent.id} className="border border-khata-subtle rounded-xl p-5 bg-khata-raised/40 space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-khata-ink flex items-center gap-2">
                     <span>{parent.name}</span>
-                    <span className="text-[11px] font-normal text-gray-500">({pVitals.length} readings)</span>
+                    <span className="text-[11px] font-normal text-khata-muted font-mono">({pVitals.length} readings)</span>
                   </h3>
                 </div>
 
                 {/* Inline SVG Chart for Blood Pressure */}
                 {bpVitals.length > 0 && (
-                  <div className="bg-white rounded-xl p-4 border border-gray-200 space-y-2">
+                  <div className="bg-white rounded-xl p-4 border border-khata-subtle space-y-2 shadow-2xs">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-gray-700">Blood Pressure Trend (BP ट्रेंड)</span>
-                      <div className="flex items-center gap-4 text-[11px] text-gray-500">
+                      <span className="font-bold text-khata-ink">Blood Pressure Trend (BP ट्रेंड)</span>
+                      <div className="flex items-center gap-4 text-[11px] text-khata-muted font-medium">
                         <span className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span> Systolic
+                          <span className="w-2.5 h-2.5 rounded-full bg-sindoor-600"></span> Systolic
                         </span>
                         <span className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Diastolic
+                          <span className="w-2.5 h-2.5 rounded-full bg-indigo-600"></span> Diastolic
                         </span>
                         {bpThreshold && (
-                          <span className="flex items-center gap-1.5 text-rose-600 font-medium">
-                            <span className="w-3 border-b-2 border-dashed border-rose-500"></span> Family limit ({bpThreshold.limit})
+                          <span className="flex items-center gap-1.5 text-sindoor-700 font-semibold font-mono">
+                            <span className="w-3 border-b-2 border-dashed border-sindoor-500"></span> Family limit ({bpThreshold.limit})
                           </span>
                         )}
                       </div>
@@ -265,7 +265,7 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
 
                 {/* Vitals List */}
                 {pVitals.length === 0 ? (
-                  <p className="text-xs text-gray-400 italic">No vitals logged in last 14 days.</p>
+                  <p className="text-xs text-khata-muted italic">No vitals logged in last 14 days.</p>
                 ) : (
                   <div className="space-y-2">
                     {pVitals.map((v) => {
@@ -279,19 +279,19 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
                       const readingVal = v.kind === "bp" ? `${v.value_1}/${v.value_2} ${v.unit}` : `${v.value_1} ${v.unit}`;
 
                       return (
-                        <div key={v.id} className="bg-white rounded-lg border border-gray-200 p-3 text-xs space-y-2">
+                        <div key={v.id} className="bg-white rounded-lg border border-khata-subtle p-3 text-xs space-y-2 shadow-2xs">
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold uppercase tracking-wider text-[10px] px-2 py-0.5 rounded-md bg-gray-100 text-gray-700">
+                            <div className="flex items-center gap-2.5">
+                              <span className="font-mono font-bold uppercase tracking-wider text-[10px] px-2 py-0.5 rounded-md bg-khata-raised text-khata-ink border border-khata-subtle">
                                 {v.kind}
                               </span>
-                              <span className="font-bold text-gray-900 text-sm">{readingVal}</span>
-                              <span className="text-gray-400">•</span>
-                              <span className="text-gray-500 text-[11px]">{dateStr}</span>
+                              <span className="font-mono font-bold text-khata-ink text-sm tabular-nums">{readingVal}</span>
+                              <span className="text-khata-muted">•</span>
+                              <span className="text-khata-muted font-mono text-[11px]">{dateStr}</span>
                             </div>
                             <button
                               onClick={() => setExpandedEvidence((prev) => ({ ...prev, [v.id]: !isExpanded }))}
-                              className="flex items-center gap-1 text-[11px] text-brand-600 hover:text-brand-800 font-medium cursor-pointer"
+                              className="flex items-center gap-1 text-[11px] text-brand-600 hover:text-brand-700 font-bold cursor-pointer"
                             >
                               <FileText size={12} />
                               {isExpanded ? "Hide source" : "Evidence"}
@@ -300,8 +300,8 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
                           </div>
 
                           {isExpanded && (
-                            <div className="p-2.5 rounded-md bg-amber-50 border border-amber-200/60 text-amber-900 text-[11px]">
-                              <span className="font-semibold">Quoted Source span:</span> &ldquo;{v.quote}&rdquo;
+                            <div className="verbatim-box p-2.5 rounded-md bg-ochre-50/70 border border-ochre-200/80 text-ochre-900 text-xs font-mono">
+                              <span className="font-sans font-bold">Quoted Source span:</span> &ldquo;{v.quote}&rdquo;
                             </div>
                           )}
                         </div>
@@ -316,22 +316,22 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
       </section>
 
       {/* 3. Family Limits (Thresholds) */}
-      <section className="bg-white rounded-2xl border border-gray-200 p-6 shadow-2xs space-y-4">
+      <section className="bg-white rounded-2xl border border-khata-subtle p-6 shadow-2xs space-y-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-ochre-100 text-ochre-800 border border-ochre-200 flex items-center justify-center shadow-2xs">
               <Shield size={18} />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-gray-900">{t("family_limits")}</h2>
-              <p className="text-xs text-gray-500">Alerts siblings when readings cross limits set by family doctor</p>
+              <h2 className="text-base font-bold text-khata-ink">{t("family_limits")}</h2>
+              <p className="text-xs text-khata-muted font-medium">Alerts siblings when readings cross limits set by family doctor</p>
             </div>
           </div>
           <button
             onClick={() => setIsAddThreshOpen(!isAddThreshOpen)}
-            className="flex items-center gap-1 text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg px-3 py-1.5 transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 text-xs font-semibold bg-white hover:bg-khata-raised text-khata-ink border border-khata-subtle rounded-lg px-3 py-1.5 transition-colors cursor-pointer shadow-2xs"
           >
-            <Plus size={14} />
+            <Plus size={14} className="text-brand-600" />
             Add Limit
           </button>
         </div>
@@ -428,22 +428,22 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
         )}
 
         {thresholds.length === 0 ? (
-          <p className="text-xs text-gray-400 py-2 italic">No family limits configured.</p>
+          <p className="text-xs text-khata-muted py-2 italic">No family limits configured.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             {thresholds.map((th) => (
-              <div key={th.id} className="p-3 rounded-xl border border-gray-200 bg-gray-50/50 flex items-start justify-between text-xs">
+              <div key={th.id} className="p-3 rounded-xl border border-khata-subtle bg-khata-raised/40 flex items-start justify-between text-xs shadow-2xs">
                 <div>
-                  <div className="font-bold text-gray-800">{getMemberName(th.member_id)}</div>
-                  <div className="text-gray-600 mt-0.5">
-                    <span className="font-semibold uppercase tracking-wider">{th.kind}</span> ({th.field} {th.op === "gt" ? ">" : "<"} {th.limit})
+                  <div className="font-bold text-khata-ink">{getMemberName(th.member_id)}</div>
+                  <div className="text-khata-ink mt-0.5 font-mono text-[11px]">
+                    <span className="font-bold uppercase tracking-wider text-ochre-800 bg-ochre-100 px-1.5 py-0.5 rounded mr-1">{th.kind}</span> ({th.field} {th.op === "gt" ? ">" : "<"} {th.limit})
                   </div>
-                  {th.note && <div className="text-gray-400 text-[11px] mt-1 italic">&ldquo;{th.note}&rdquo;</div>}
+                  {th.note && <div className="text-khata-muted text-[11px] mt-1 italic">&ldquo;{th.note}&rdquo;</div>}
                 </div>
                 <button
                   onClick={() => deactivateThreshMutation.mutate(th.id)}
                   title="Remove limit"
-                  className="p-1 text-gray-400 hover:text-red-600 rounded transition-colors cursor-pointer"
+                  className="p-1 text-khata-muted hover:text-sindoor-600 rounded transition-colors cursor-pointer"
                 >
                   <Trash2 size={13} />
                 </button>
@@ -454,20 +454,20 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
       </section>
 
       {/* 4. Medicines Setup */}
-      <section className="bg-white rounded-2xl border border-gray-200 p-6 shadow-2xs space-y-4">
+      <section className="bg-white rounded-2xl border border-khata-subtle p-6 shadow-2xs space-y-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-brand-100 text-brand-700 border border-brand-200 flex items-center justify-center shadow-2xs">
               <Pill size={18} />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-gray-900">{t("medicines_setup")}</h2>
-              <p className="text-xs text-gray-500">Entered by children with reminder times and escalation owner</p>
+              <h2 className="text-base font-bold text-khata-ink">{t("medicines_setup")}</h2>
+              <p className="text-xs text-khata-muted font-medium">Entered by children with reminder times and escalation owner</p>
             </div>
           </div>
           <button
             onClick={() => setIsAddMedOpen(!isAddMedOpen)}
-            className="flex items-center gap-1 text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg px-3 py-1.5 transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 text-xs font-semibold bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white rounded-lg px-3 py-1.5 transition-all cursor-pointer shadow-2xs active:scale-98"
           >
             <Plus size={14} />
             Add Medicine
@@ -475,15 +475,15 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
         </div>
 
         {isAddMedOpen && (
-          <div className="border border-brand-200 rounded-xl p-4 bg-brand-50/40 space-y-3 text-xs">
-            <h4 className="font-bold text-gray-800">Add New Medication</h4>
+          <div className="border border-brand-200 rounded-xl p-4 bg-brand-50/40 space-y-3 text-xs shadow-2xs">
+            <h4 className="font-bold text-khata-ink">Add New Medication</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
               <div>
-                <label className="block text-gray-600 mb-1 font-medium">Parent</label>
+                <label className="block text-khata-ink mb-1 font-semibold text-[11px]">Parent</label>
                 <select
                   value={newMedParentId}
                   onChange={(e) => setNewMedParentId(Number(e.target.value))}
-                  className="w-full bg-white border border-gray-200 rounded-lg p-2"
+                  className="w-full bg-white border border-khata-subtle rounded-lg p-2 text-khata-ink"
                 >
                   {parents.map((p) => (
                     <option key={p.id} value={p.id}>{p.name}</option>
@@ -491,41 +491,41 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
                 </select>
               </div>
               <div>
-                <label className="block text-gray-600 mb-1 font-medium">Medicine Name</label>
+                <label className="block text-khata-ink mb-1 font-semibold text-[11px]">Medicine Name</label>
                 <input
                   type="text"
                   placeholder="e.g. सकाळची गोळी / Metformin"
                   value={newMedName}
                   onChange={(e) => setNewMedName(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-lg p-2"
+                  className="w-full bg-white border border-khata-subtle rounded-lg p-2 text-khata-ink"
                 />
               </div>
               <div>
-                <label className="block text-gray-600 mb-1 font-medium">Dose Text</label>
+                <label className="block text-khata-ink mb-1 font-semibold text-[11px]">Dose Text</label>
                 <input
                   type="text"
                   placeholder="e.g. 1 tablet"
                   value={newMedDose}
                   onChange={(e) => setNewMedDose(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-lg p-2"
+                  className="w-full bg-white border border-khata-subtle rounded-lg p-2 text-khata-ink"
                 />
               </div>
               <div>
-                <label className="block text-gray-600 mb-1 font-medium">Times (HH:MM, comma-separated)</label>
+                <label className="block text-khata-ink mb-1 font-semibold text-[11px]">Times (HH:MM, comma-separated)</label>
                 <input
                   type="text"
                   placeholder="08:00, 20:00"
                   value={newMedTimes}
                   onChange={(e) => setNewMedTimes(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-lg p-2"
+                  className="w-full bg-white border border-khata-subtle rounded-lg p-2 text-khata-ink font-mono"
                 />
               </div>
               <div>
-                <label className="block text-gray-600 mb-1 font-medium">Owner Child (for missed dose alerts)</label>
+                <label className="block text-khata-ink mb-1 font-semibold text-[11px]">Owner Child (for missed dose alerts)</label>
                 <select
                   value={newMedOwnerChildId || ""}
                   onChange={(e) => setNewMedOwnerChildId(e.target.value ? Number(e.target.value) : undefined)}
-                  className="w-full bg-white border border-gray-200 rounded-lg p-2"
+                  className="w-full bg-white border border-khata-subtle rounded-lg p-2 text-khata-ink"
                 >
                   <option value="">All Children</option>
                   {children.map((c) => (
@@ -537,14 +537,14 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
             <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => setIsAddMedOpen(false)}
-                className="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 cursor-pointer"
+                className="px-3 py-1.5 rounded-lg border border-khata-subtle text-khata-ink hover:bg-khata-raised cursor-pointer text-xs font-semibold"
               >
                 Cancel
               </button>
               <button
                 onClick={() => addMedMutation.mutate()}
                 disabled={addMedMutation.isPending || !newMedName.trim()}
-                className="px-3 py-1.5 rounded-lg bg-brand-600 text-white font-semibold hover:bg-brand-700 cursor-pointer disabled:opacity-50"
+                className="px-3.5 py-1.5 rounded-lg bg-brand-500 text-white font-bold hover:bg-brand-600 cursor-pointer disabled:opacity-50 text-xs shadow-2xs"
               >
                 Save Medicine
               </button>
@@ -553,17 +553,17 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
         )}
 
         {medications.length === 0 ? (
-          <p className="text-xs text-gray-400 py-2 italic">No active medications registered.</p>
+          <p className="text-xs text-khata-muted py-2 italic">No active medications registered.</p>
         ) : (
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-khata-subtle">
             {medications.map((m) => (
               <div key={m.id} className="py-3 flex items-center justify-between text-xs">
                 <div>
-                  <div className="font-semibold text-gray-900 flex items-center gap-2">
+                  <div className="font-bold text-khata-ink flex items-center gap-2">
                     <span>{m.name}</span>
-                    <span className="text-[11px] font-normal text-gray-500">({m.dose_text})</span>
+                    <span className="text-[11px] font-normal text-khata-muted">({m.dose_text})</span>
                   </div>
-                  <div className="text-gray-500 text-[11px] mt-0.5 flex items-center gap-2">
+                  <div className="text-khata-muted text-[11px] mt-0.5 flex items-center gap-2 font-mono">
                     <span>Parent: {getMemberName(m.member_id)}</span>
                     <span>•</span>
                     <span>Times: {m.times.join(", ")}</span>
@@ -578,7 +578,7 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
                 <div>
                   <button
                     onClick={() => toggleMedActiveMutation.mutate({ id: m.id, active: !m.active })}
-                    className="text-[11px] px-2.5 py-1 rounded-md border border-gray-200 hover:bg-gray-100 font-medium text-gray-600 cursor-pointer"
+                    className="text-[11px] px-2.5 py-1 rounded-md border border-khata-subtle hover:bg-khata-raised font-semibold text-khata-ink cursor-pointer shadow-2xs"
                   >
                     Deactivate
                   </button>
@@ -590,8 +590,8 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
       </section>
 
       {/* 5. Footer Medical Disclaimer */}
-      <footer className="pt-4 border-t border-gray-200 text-center">
-        <p className="text-xs text-gray-400">
+      <footer className="pt-4 border-t border-khata-subtle text-center">
+        <p className="text-xs text-khata-muted font-medium">
           {t("health_disclaimer")}
         </p>
       </footer>
@@ -634,7 +634,7 @@ function BPLineChart({ vitals, threshold }: { vitals: Vital[]; threshold?: Vital
   const threshY = threshold ? mapY(Number(threshold.limit)) : null;
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-36 font-sans">
+    <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-36 font-mono">
       {/* Grid Lines */}
       {[60, 90, 120, 150, 180].map((level) => (
         <g key={level}>
@@ -643,10 +643,10 @@ function BPLineChart({ vitals, threshold }: { vitals: Vital[]; threshold?: Vital
             y1={mapY(level)}
             x2={width - paddingX}
             y2={mapY(level)}
-            stroke="#f1f5f9"
+            stroke="#E8E3D8"
             strokeWidth="1"
           />
-          <text x={paddingX - 6} y={mapY(level) + 3} textAnchor="end" fontSize="9" fill="#94a3b8">
+          <text x={paddingX - 6} y={mapY(level) + 3} textAnchor="end" fontSize="9" fill="#7D7566">
             {level}
           </text>
         </g>
@@ -660,7 +660,7 @@ function BPLineChart({ vitals, threshold }: { vitals: Vital[]; threshold?: Vital
             y1={threshY}
             x2={width - paddingX}
             y2={threshY}
-            stroke="#f43f5e"
+            stroke="#C92A2A"
             strokeWidth="1.5"
             strokeDasharray="4 4"
           />
@@ -670,31 +670,31 @@ function BPLineChart({ vitals, threshold }: { vitals: Vital[]; threshold?: Vital
             textAnchor="end"
             fontSize="9"
             fontWeight="bold"
-            fill="#e11d48"
+            fill="#C92A2A"
           >
             Family limit: {threshold.limit}
           </text>
         </g>
       )}
 
-      {/* Systolic Polyline (Red/Rose) */}
-      <polyline fill="none" stroke="#f43f5e" strokeWidth="2.5" points={sysPoints} />
+      {/* Systolic Polyline (Sindoor Crimson) */}
+      <polyline fill="none" stroke="#C92A2A" strokeWidth="2.5" points={sysPoints} />
       {sorted.map((v, idx) => (
         <circle
           key={`sys-${idx}`}
           cx={mapX(idx)}
           cy={mapY(Number(v.value_1))}
           r="3.5"
-          fill="#f43f5e"
+          fill="#C92A2A"
           stroke="#ffffff"
           strokeWidth="1.5"
         />
       ))}
 
-      {/* Diastolic Polyline (Blue) */}
+      {/* Diastolic Polyline (Deep Indigo) */}
       {diaPoints && (
         <>
-          <polyline fill="none" stroke="#3b82f6" strokeWidth="2.5" points={diaPoints} />
+          <polyline fill="none" stroke="#4338CA" strokeWidth="2.5" points={diaPoints} />
           {sorted
             .filter((v) => v.value_2 !== null)
             .map((v, idx) => (
@@ -703,7 +703,7 @@ function BPLineChart({ vitals, threshold }: { vitals: Vital[]; threshold?: Vital
                 cx={mapX(idx)}
                 cy={mapY(Number(v.value_2))}
                 r="3.5"
-                fill="#3b82f6"
+                fill="#4338CA"
                 stroke="#ffffff"
                 strokeWidth="1.5"
               />
@@ -722,7 +722,7 @@ function BPLineChart({ vitals, threshold }: { vitals: Vital[]; threshold?: Vital
             y={height - 4}
             textAnchor="middle"
             fontSize="9"
-            fill="#64748b"
+            fill="#7D7566"
           >
             {label}
           </text>

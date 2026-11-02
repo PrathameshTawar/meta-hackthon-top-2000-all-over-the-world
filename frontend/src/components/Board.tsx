@@ -13,11 +13,11 @@ import { HealthPanel } from "./HealthPanel";
 import { FastForward, Sparkles, Activity, RotateCcw, AlertTriangle, CheckCircle2, HeartPulse, CheckSquare } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
-const COLUMNS: { statuses: TaskStatus[]; labelKey: string; color: string }[] = [
-  { statuses: ["new", "confirmed", "escalated"], labelKey: "col_new", color: "bg-blue-50/70 border-blue-200" },
-  { statuses: ["needs_review"], labelKey: "col_needs_review", color: "bg-amber-50/70 border-amber-200" },
-  { statuses: ["claimed"], labelKey: "col_claimed", color: "bg-purple-50/70 border-purple-200" },
-  { statuses: ["done"], labelKey: "col_done", color: "bg-emerald-50/70 border-emerald-200" },
+const COLUMNS: { statuses: TaskStatus[]; labelKey: string; index: string; dotColor: string }[] = [
+  { statuses: ["new", "confirmed", "escalated"], labelKey: "col_new", index: "01", dotColor: "bg-brand-500" },
+  { statuses: ["needs_review"], labelKey: "col_needs_review", index: "02", dotColor: "bg-ochre-500" },
+  { statuses: ["claimed"], labelKey: "col_claimed", index: "03", dotColor: "bg-indigo-600" },
+  { statuses: ["done"], labelKey: "col_done", index: "04", dotColor: "bg-sage-600" },
 ];
 
 interface BoardProps {
@@ -74,20 +74,20 @@ export function Board({ householdId }: BoardProps) {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-65px)]">
+    <div className="flex flex-col h-[calc(100vh-65px)] bg-khata-canvas">
       {/* 30-Day Family Financial Commitments */}
       <MonthCommitmentBar tasks={tasks} />
 
       {/* Action / Toolbar */}
-      <div className="bg-white border-b border-gray-200 px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+      <div className="bg-khata-raised/90 backdrop-blur-xs border-b border-khata-subtle px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
         {/* Tab Switcher & Members status */}
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
+          <div className="flex items-center gap-1 bg-white border border-khata-subtle p-1 rounded-xl shadow-2xs">
             <button
               onClick={() => setActiveTab("tasks")}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${activeTab === "tasks"
-                  ? "bg-white text-gray-900 shadow-2xs"
-                  : "text-gray-600 hover:text-gray-900"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${activeTab === "tasks"
+                  ? "bg-khata-ink text-white shadow-2xs"
+                  : "text-khata-muted hover:text-khata-ink"
                 }`}
             >
               <CheckSquare size={13} />
@@ -95,9 +95,9 @@ export function Board({ householdId }: BoardProps) {
             </button>
             <button
               onClick={() => setActiveTab("health")}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${activeTab === "health"
-                  ? "bg-white text-rose-600 shadow-2xs"
-                  : "text-gray-600 hover:text-gray-900"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${activeTab === "health"
+                  ? "bg-sindoor-600 text-white shadow-2xs"
+                  : "text-khata-muted hover:text-khata-ink"
                 }`}
             >
               <HeartPulse size={13} />
@@ -111,14 +111,14 @@ export function Board({ householdId }: BoardProps) {
         {/* Demo buttons */}
         <div className="flex items-center gap-2">
           {toastMessage && (
-            <span className="text-xs font-medium text-amber-900 bg-amber-100 border border-amber-200 rounded-lg px-2.5 py-1 animate-pulse">
+            <span className="text-xs font-medium text-ochre-900 bg-ochre-100 border border-ochre-200 rounded-lg px-2.5 py-1 animate-pulse">
               {toastMessage}
             </span>
           )}
 
           <button
             onClick={() => setIsSimulateOpen(true)}
-            className="flex items-center gap-1.5 text-xs font-semibold bg-brand-500 hover:bg-brand-600 text-white rounded-lg px-3 py-1.5 transition-colors shadow-2xs cursor-pointer"
+            className="flex items-center gap-1.5 text-xs font-semibold bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white rounded-lg px-3.5 py-1.5 transition-all shadow-2xs cursor-pointer hover:shadow-xs active:scale-98"
           >
             <Sparkles size={14} />
             {t("try_live_agent")}
@@ -127,7 +127,7 @@ export function Board({ householdId }: BoardProps) {
           <button
             onClick={() => escalateMutation.mutate()}
             disabled={escalateMutation.isPending}
-            className="flex items-center gap-1.5 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-lg px-3 py-1.5 transition-colors shadow-2xs cursor-pointer"
+            className="flex items-center gap-1.5 text-xs font-semibold bg-ochre-700 hover:bg-ochre-800 active:bg-ochre-900 text-white rounded-lg px-3 py-1.5 transition-all shadow-2xs cursor-pointer hover:shadow-xs active:scale-98 disabled:opacity-50"
             title="Simulate advancing clock by 3 days to test escalation near deadline"
           >
             <FastForward size={14} />
@@ -136,17 +136,17 @@ export function Board({ householdId }: BoardProps) {
 
           <button
             onClick={() => setIsAuditOpen(true)}
-            className="flex items-center gap-1.5 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg px-3 py-1.5 transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 text-xs font-medium bg-white hover:bg-khata-raised text-khata-ink border border-khata-subtle rounded-lg px-3 py-1.5 transition-colors cursor-pointer shadow-2xs"
             title="Inspect append-only agent decision audit log"
           >
-            <Activity size={14} />
+            <Activity size={14} className="text-khata-muted" />
             {t("audit_log")}
           </button>
 
           <button
             onClick={() => resetMutation.mutate()}
             disabled={resetMutation.isPending}
-            className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+            className="p-1.5 text-khata-muted hover:text-khata-ink hover:bg-white border border-transparent hover:border-khata-subtle rounded-lg transition-colors cursor-pointer"
             title="Reset demo data to initial state"
           >
             <RotateCcw size={15} />
@@ -158,15 +158,16 @@ export function Board({ householdId }: BoardProps) {
       {activeTab === "health" ? (
         <HealthPanel householdId={householdId} members={members} />
       ) : (
-        <div className="flex flex-1 overflow-hidden bg-slate-50/50">
+        <div className="flex flex-1 overflow-hidden bg-khata-canvas">
           <div className="flex flex-1 gap-4 p-6 overflow-x-auto">
             {COLUMNS.map((col) => {
               const colTasks = tasks.filter((t) => col.statuses.includes(t.status));
               return (
                 <TaskColumn
                   key={col.labelKey}
+                  index={col.index}
+                  dotColor={col.dotColor}
                   label={t(col.labelKey)}
-                  colorClass={col.color}
                   tasks={colTasks}
                   members={members}
                   onSelect={setSelectedTask}

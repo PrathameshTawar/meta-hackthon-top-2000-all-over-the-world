@@ -1,37 +1,62 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+Devanagari:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  html {
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "tnum";
+  }
+
   body {
-    @apply bg-gray-50 text-gray-900 antialiased;
+    @apply bg-khata-canvas text-khata-ink antialiased selection:bg-brand-100 selection:text-brand-900;
+    font-family: "Plus Jakarta Sans", "Inter", "Noto Sans Devanagari", sans-serif;
+  }
+
+  /* Custom subtle scrollbar matching the paper aesthetic */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #d9d3c5;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #aba494;
   }
 }
 
 @layer components {
   .column-header {
-    @apply text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3;
+    @apply text-[11px] font-mono font-semibold uppercase tracking-wider text-khata-muted mb-3 flex items-center justify-between;
   }
 
   .task-card {
-    @apply bg-white rounded-xl border border-gray-200 p-4 shadow-sm
-           hover:shadow-md transition-shadow cursor-pointer;
+    @apply bg-white rounded-xl border border-khata-subtle p-3.5 shadow-card
+           hover:shadow-card-hover hover:border-khata-border transition-all duration-200 cursor-pointer;
   }
 
   .badge {
-    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5
-           text-xs font-medium;
+    @apply inline-flex items-center gap-1 rounded-md px-2 py-0.5
+           text-xs font-medium tracking-tight;
   }
 
   .btn-primary {
-    @apply bg-brand-500 hover:bg-brand-600 text-white rounded-lg px-4 py-2
-           text-sm font-medium transition-colors;
+    @apply bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white rounded-lg px-4 py-2
+           text-xs font-semibold tracking-wide transition-all shadow-xs cursor-pointer;
   }
 
   .btn-ghost {
-    @apply text-gray-600 hover:text-gray-900 hover:bg-gray-100
-           rounded-lg px-3 py-1.5 text-sm transition-colors;
+    @apply text-khata-muted hover:text-khata-ink hover:bg-khata-raised
+           rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer;
+  }
+
+  .verbatim-box {
+    @apply font-mono text-xs bg-amber-50/70 border border-amber-200/80 rounded-md p-2 text-amber-950 leading-relaxed;
   }
 }
