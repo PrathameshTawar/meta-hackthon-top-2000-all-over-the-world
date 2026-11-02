@@ -101,6 +101,7 @@ class Member(Base):
     last_inbound_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # JSON list of TaskCategory strings this member "owns"
     categories_owned: Mapped[Optional[list]] = mapped_column(JSON, default=list)
+    language: Mapped[str] = mapped_column(String(10), default="mr", nullable=False)
 
     household: Mapped["Household"] = relationship(back_populates="members")
     assigned_tasks: Mapped[List["Task"]] = relationship(back_populates="assignee")

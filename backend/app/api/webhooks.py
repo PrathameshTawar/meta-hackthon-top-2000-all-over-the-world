@@ -39,6 +39,7 @@ from app.db.models import (
 from app.db.session import AsyncSessionLocal
 from app.agent.graph import get_compiled_graph
 from langgraph.types import Command
+from app.core.i18n import t, is_language_command, detect_language
 
 logger = logging.getLogger(__name__)
 
@@ -335,25 +336,24 @@ async def _notify_siblings_new_task(household_id: int, task_id: int, sibling_not
         )
         children = children_res.scalars().all()
 
-        tg_reply_markup = {
-            "inline_keyboard": [
-                [
-                    {"text": "✅ Claim / मी करतो", "callback_data": f"claim:{task_id}"},
-                    {"text": "✔️ Done / पूर्ण झाले", "callback_data": f"done:{task_id}"},
-                ],
-                [
-                    {"text": "📋 View Board", "url": settings.frontend_url},
-                ],
-            ]
-        }
-
-        wa_buttons = [
-            {"id": f"claim:{task_id}", "title": "Claim Task"},
-            {"id": f"done:{task_id}", "title": "Mark Done"},
-        ]
-
         for child in children:
             if str(child.telegram_id) != str(sender_chat_id) and str(child.phone) != str(sender_chat_id):
+                c_lang = getattr(child, "language", None) or "en"
+                tg_reply_markup = {
+                    "inline_keyboard": [
+                        [
+                            {"text": f"✅ {t('btn_claim', c_lang)}", "callback_data": f"claim:{task_id}"},
+                            {"text": f"✔️ {t('btn_done', c_lang)}", "callback_data": f"done:{task_id}"},
+                        ],
+                        [
+                            {"text": f"📋 {t('btn_view_board', c_lang)}", "url": settings.frontend_url},
+                        ],
+                    ]
+                }
+                wa_buttons = [
+                    {"id": f"claim:{task_id}", "title": t("btn_claim", c_lang)[:20]},
+                    {"id": f"done:{task_id}", "title": t("btn_done", c_lang)[:20]},
+                ]
                 await notify(
                     member=child,
                     text=sibling_notification,
@@ -450,30 +450,31 @@ async def _run_agent(artifact_id: int, household_id: int, artifact_type: str, fi
                     await _send_whatsapp_message(chat_id, parent_reassurance)
 
             # Route confirmation buttons to target sibling
+            s_lang = getattr(target_sibling, "language", None) or "en" if target_sibling else "en"
             if reasons:
                 reasons_text = "\n".join(f"• {r}" for r in reasons)
                 confirm_text = (
-                    f"❓ *Please verify extracted details for family board*:\n{interrupted_question}\n\n"
-                    f"*Why verification is needed*:\n{reasons_text}"
+                    f"❓ *{t('please_verify_title', s_lang)}*:\n{interrupted_question}\n\n"
+                    f"*{t('why_verification_needed', s_lang)}*:\n{reasons_text}"
                 )
             else:
                 confirm_text = (
-                    f"❓ *Please verify extracted details for family board*:\n{interrupted_question}"
+                    f"❓ *{t('please_verify_title', s_lang)}*:\n{interrupted_question}"
                 )
             tg_reply_markup = {
                 "inline_keyboard": [
                     [
-                        {"text": "✅ Correct / बरोबर", "callback_data": f"confirm_yes:{artifact_id}"},
-                        {"text": "❌ Wrong / चूक", "callback_data": f"confirm_no:{artifact_id}"},
+                        {"text": f"✅ {t('btn_correct', s_lang)}", "callback_data": f"confirm_yes:{artifact_id}"},
+                        {"text": f"❌ {t('btn_wrong', s_lang)}", "callback_data": f"confirm_no:{artifact_id}"},
                     ],
                     [
-                        {"text": "📋 View Board", "url": settings.frontend_url},
+                        {"text": f"📋 {t('btn_view_board', s_lang)}", "url": settings.frontend_url},
                     ],
                 ]
             }
             wa_buttons = [
-                {"id": f"confirm_yes:{artifact_id}", "title": "Correct (बरोबर)"},
-                {"id": f"confirm_no:{artifact_id}", "title": "Wrong (चूक)"},
+                {"id": f"confirm_yes:{artifact_id}", "title": t("btn_correct", s_lang)[:20]},
+                {"id": f"confirm_no:{artifact_id}", "title": t("btn_wrong", s_lang)[:20]},
             ]
 
             if target_sibling:
@@ -665,6 +666,26 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
                 await _answer_callback_query(cb_id, "त्रुटी आली.")
                 return {"ok": False, "error": str(exc)}
 
+        # Language Switch Button: lang:{code}
+        elif cb_data.startswith("lang:"):
+            try:
+                target_lang = cb_data.split(":")[-1]
+                if target_lang in ("mr", "hi", "en"):
+                    async with AsyncSessionLocal() as db:
+                        res = await db.execute(select(Member).where(Member.telegram_id == from_user))
+                        member = res.scalars().first()
+                        if member:
+                            member.language = target_lang
+                            await db.commit()
+                    ack_text = t("language_changed", target_lang)
+                    await _answer_callback_query(cb_id, ack_text)
+                    await _send_telegram_message(chat_id, ack_text)
+                    return {"ok": True, "action": "language_changed", "language": target_lang}
+            except Exception as exc:
+                logger.error(f"Error handling lang callback: {exc}", exc_info=True)
+                await _answer_callback_query(cb_id, "Error changing language")
+                return {"ok": False, "error": str(exc)}
+
         # Claim Button: claim:{task_id}
         elif cb_data.startswith(("claim:", "claim_")):
             try:
@@ -700,11 +721,12 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
                     ))
                     await db.commit()
 
+                    m_lang = getattr(member, "language", None) or "en"
                     done_markup = {
                         "inline_keyboard": [
                             [
-                                {"text": "✔️ Mark Done / काम पूर्ण झाले", "callback_data": f"done:{task.id}"},
-                                {"text": "📋 View Board", "url": settings.frontend_url},
+                                {"text": f"✔️ {t('btn_done', m_lang)}", "callback_data": f"done:{task.id}"},
+                                {"text": f"📋 {t('btn_view_board', m_lang)}", "url": settings.frontend_url},
                             ]
                         ]
                     }
@@ -814,9 +836,27 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
 
     household_id = member.household_id
 
-    # Handle text messages (e.g. "काय बाकी आहे?" / status inquiries)
+    # Handle text messages (e.g. "काय बाकी आहे?" / status inquiries / language switch)
     text_content = message.get("text", "").strip()
     if text_content and not any(k in message for k in ["photo", "voice", "audio", "document"]):
+        if is_language_command(text_content):
+            m_lang = getattr(member, "language", None) or "en"
+            reply_markup = {
+                "inline_keyboard": [
+                    [
+                        {"text": "मराठी", "callback_data": "lang:mr"},
+                        {"text": "हिंदी", "callback_data": "lang:hi"},
+                        {"text": "English", "callback_data": "lang:en"},
+                    ]
+                ]
+            }
+            await _send_telegram_message(
+                chat_id,
+                t("choose_language_prompt", m_lang),
+                reply_markup=reply_markup,
+            )
+            return {"ok": True}
+
         if await _is_status_query(text_content):
             from app.services.tasks import build_pending_tasks_reply
             reply = await build_pending_tasks_reply(household_id)
@@ -1062,24 +1102,36 @@ async def process_single_whatsapp_message(msg: dict):
         btn_id = msg.get("button", {}).get("payload", "") or msg.get("button", {}).get("text", "")
 
     if btn_id:
+        # Language Switch
+        if btn_id.startswith("lang:"):
+            target_lang = btn_id.split(":")[-1]
+            if target_lang in ("mr", "hi", "en"):
+                async with AsyncSessionLocal() as db:
+                    m = await db.get(Member, member.id)
+                    if m:
+                        m.language = target_lang
+                        await db.commit()
+                await _send_whatsapp_message(from_phone, t("language_changed", target_lang))
+                return
+
         # Claim
-        if btn_id.startswith(("claim:", "claim_")):
+        elif btn_id.startswith(("claim:", "claim_")):
             task_id = int(btn_id.replace("claim:", "").replace("claim_", ""))
             from app.services.tasks import claim_task, ClaimResult
             claim_res, task = await claim_task(task_id, member)
+            m_lang = getattr(member, "language", None) or "en"
             if claim_res == ClaimResult.ok:
                 await _send_whatsapp_message(
                     from_phone,
-                    f"✅ Task #{task.id} ('{task.title}') has been claimed by you on the family board.\n"
-                    f"When finished, tap Mark Done.",
-                    buttons=[{"id": f"done:{task.id}", "title": "Mark Done"}],
+                    t("task_claimed_ack", m_lang, task_id=task.id, title=task.title),
+                    buttons=[{"id": f"done:{task.id}", "title": t("btn_done", m_lang)[:20]}],
                 )
             elif claim_res == ClaimResult.taken:
-                await _send_whatsapp_message(from_phone, "⚠️ हे काम आधीच दुसऱ्या भावंडाने स्वीकारले आहे.")
+                await _send_whatsapp_message(from_phone, t("task_already_claimed", m_lang))
             elif claim_res == ClaimResult.already_yours:
-                await _send_whatsapp_message(from_phone, "हे काम आधीच तुम्ही स्वीकारले आहे.")
+                await _send_whatsapp_message(from_phone, t("task_already_yours", m_lang))
             elif claim_res == ClaimResult.done:
-                await _send_whatsapp_message(from_phone, "हे काम आधीच पूर्ण झाले आहे.")
+                await _send_whatsapp_message(from_phone, t("task_already_done", m_lang))
             return
 
         # Done
@@ -1087,15 +1139,16 @@ async def process_single_whatsapp_message(msg: dict):
             task_id = int(btn_id.replace("done:", "").replace("done_", ""))
             from app.services.tasks import complete_task, DoneResult
             done_res, task = await complete_task(task_id, member.name, member.household_id)
+            m_lang = getattr(member, "language", None) or "en"
             if done_res == DoneResult.ok:
                 await _send_whatsapp_message(
                     from_phone,
-                    f"✔️ '{task.title}' काम पूर्ण झाल्याचे नोंदवले आहे. पालकांना कळवले आहे. 🙏",
+                    t("task_done_ack", m_lang, title=task.title),
                 )
             elif done_res == DoneResult.already_done:
                 await _send_whatsapp_message(
                     from_phone,
-                    "✔️ हे काम आधीच पूर्ण झाले आहे. पालकांना आधीच कळवले आहे. 🙏",
+                    t("task_already_done", m_lang),
                 )
             return
 
@@ -1110,10 +1163,11 @@ async def process_single_whatsapp_message(msg: dict):
         # Confirmation: confirm_yes
         elif btn_id.startswith(("confirm_yes:", "confirm:yes:")):
             artifact_id = int(btn_id.split(":")[-1])
+            m_lang = getattr(member, "language", None) or "en"
             async with AsyncSessionLocal() as db:
                 artifact = await db.get(Artifact, artifact_id)
                 if not artifact or artifact.household_id != household_id:
-                    await _send_whatsapp_message(from_phone, "⚠️ हे काम तुमच्या कुटुंबाचे नाही.")
+                    await _send_whatsapp_message(from_phone, t("not_your_household", m_lang))
                     return
 
             graph = await get_compiled_graph()
@@ -1124,7 +1178,7 @@ async def process_single_whatsapp_message(msg: dict):
                     final_state = step
             await _send_whatsapp_message(
                 from_phone,
-                "✅ माहितीची पुष्टी झाली! काम कुटुंब बोर्डवर जोडले आहे. 🙏"
+                t("confirm_verified_ack", m_lang),
             )
             state = {}
             if final_state:
@@ -1143,10 +1197,11 @@ async def process_single_whatsapp_message(msg: dict):
         # Confirmation: confirm_no
         elif btn_id.startswith(("confirm_no:", "confirm:no:")):
             artifact_id = int(btn_id.split(":")[-1])
+            m_lang = getattr(member, "language", None) or "en"
             async with AsyncSessionLocal() as db:
                 artifact = await db.get(Artifact, artifact_id)
                 if not artifact or artifact.household_id != household_id:
-                    await _send_whatsapp_message(from_phone, "⚠️ हे काम तुमच्या कुटुंबाचे नाही.")
+                    await _send_whatsapp_message(from_phone, t("not_your_household", m_lang))
                     return
 
             graph = await get_compiled_graph()
@@ -1156,13 +1211,29 @@ async def process_single_whatsapp_message(msg: dict):
                     pass
             await _send_whatsapp_message(
                 from_phone,
-                "❌ ठीक आहे, आम्ही हे काम रद्द केले आहे. कृपया पुन्हा पाठवा. 🙏"
+                t("confirm_cancelled_ack", m_lang),
             )
             return
 
     # 2. Handle Text Messages & Status Queries
     text_content = msg.get("text", {}).get("body", "").strip()
     if text_content:
+        m_lang = getattr(member, "language", None) or "mr"
+
+        # Check language switch command
+        if is_language_command(text_content):
+            buttons = [
+                {"id": "lang:mr", "title": "मराठी"},
+                {"id": "lang:hi", "title": "हिंदी"},
+                {"id": "lang:en", "title": "English"},
+            ]
+            await _send_whatsapp_message(
+                from_phone,
+                t("choose_language_prompt", m_lang),
+                buttons=buttons,
+            )
+            return
+
         if await _is_status_query(text_content):
             async with AsyncSessionLocal() as db:
                 tasks_res = await db.execute(
@@ -1174,12 +1245,12 @@ async def process_single_whatsapp_message(msg: dict):
                 pending_tasks = tasks_res.scalars().all()
 
             if not pending_tasks:
-                reply = "सध्या कोणतीही कामे बाकी नाहीत! सर्व कामे पूर्ण झाली आहेत. 🙏"
+                reply = t("no_pending_tasks", m_lang)
             else:
-                lines = ["📋 सध्या बाकी असलेली कामे:"]
-                for i, t in enumerate(pending_tasks[:5], 1):
-                    amt = f" ({t.amount})" if t.amount else ""
-                    lines.append(f"{i}. {t.title}{amt}")
+                lines = [t("pending_tasks_header", m_lang)]
+                for i, t_obj in enumerate(pending_tasks[:5], 1):
+                    amt = f" ({t_obj.amount})" if t_obj.amount else ""
+                    lines.append(f"{i}. {t_obj.title}{amt}")
                 reply = "\n".join(lines)
 
             await _send_whatsapp_message(from_phone, reply)

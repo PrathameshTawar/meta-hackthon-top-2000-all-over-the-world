@@ -17,6 +17,7 @@ class MemberOut(BaseModel):
     role: str
     telegram_id: Optional[str]
     categories_owned: Optional[List[str]]
+    language: str = "mr"
 
     class Config:
         from_attributes = True
@@ -28,6 +29,11 @@ class MemberCreate(BaseModel):
     role: str
     telegram_id: Optional[str] = None
     categories_owned: Optional[List[str]] = []
+    language: Optional[str] = "mr"
+
+
+class MemberUpdateLanguage(BaseModel):
+    language: str
 
 
 @router.get("/{household_id}", response_model=list[MemberOut])
@@ -38,6 +44,23 @@ async def list_members(household_id: int, db: AsyncSession = Depends(get_db)):
     return result.scalars().all()
 
 
+@router.patch("/{member_id}/language", response_model=MemberOut)
+async def update_member_language(
+    member_id: int,
+    data: MemberUpdateLanguage,
+    db: AsyncSession = Depends(get_db),
+):
+    if data.language not in ("mr", "hi", "en"):
+        raise HTTPException(status_code=422, detail="Language must be one of: mr, hi, en")
+    member = await db.get(Member, member_id)
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+    member.language = data.language
+    await db.commit()
+    await db.refresh(member)
+    return member
+
+
 @router.post("/", response_model=MemberOut, status_code=201)
 async def create_member(data: MemberCreate, db: AsyncSession = Depends(get_db)):
     member = Member(
@@ -46,6 +69,7 @@ async def create_member(data: MemberCreate, db: AsyncSession = Depends(get_db)):
         role=MemberRole(data.role),
         telegram_id=data.telegram_id,
         categories_owned=data.categories_owned or [],
+        language=data.language or "mr",
     )
     db.add(member)
     await db.commit()

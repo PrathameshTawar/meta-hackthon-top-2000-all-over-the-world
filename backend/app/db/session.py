@@ -40,9 +40,19 @@ AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 async def init_db():
     """Create all tables on startup (dev convenience; use Alembic for prod)."""
     global engine, AsyncSessionLocal
+
+    def _migrate_sqlite(sync_conn):
+        from sqlalchemy import text
+        res = sync_conn.execute(text("PRAGMA table_info(members)"))
+        cols = [row[1] for row in res.fetchall()]
+        if cols and "language" not in cols:
+            sync_conn.execute(text("ALTER TABLE members ADD COLUMN language VARCHAR(10) DEFAULT 'mr'"))
+
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            if str(engine.url).startswith("sqlite"):
+                await conn.run_sync(_migrate_sqlite)
     except Exception as exc:
         if not str(engine.url).startswith("sqlite"):
             logger.warning("PostgreSQL connection to %s failed (%s). Falling back to SQLite.", engine.url, exc)
@@ -52,6 +62,7 @@ async def init_db():
             AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
+                await conn.run_sync(_migrate_sqlite)
         else:
             raise
 

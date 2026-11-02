@@ -41,6 +41,7 @@ async def seed_data():
             telegram_id="baba_pune",
             phone=os.getenv("DEMO_BABA_PHONE", "+919800000001"),
             categories_owned=[],
+            language="mr",
         )
         aai = Member(
             household_id=household.id,
@@ -49,6 +50,7 @@ async def seed_data():
             telegram_id="aai_pune",
             phone=os.getenv("DEMO_AAI_PHONE", "+919800000002"),
             categories_owned=[],
+            language="mr",
         )
         # Children in different cities
         rohan = Member(
@@ -58,6 +60,7 @@ async def seed_data():
             telegram_id="rohan_blr",
             phone=os.getenv("DEMO_ROHAN_PHONE", "+919800000003"),
             categories_owned=["bill", "loan_emi", "insurance"],
+            language="en",
         )
         priya = Member(
             household_id=household.id,
@@ -66,6 +69,7 @@ async def seed_data():
             telegram_id="priya_mum",
             phone=os.getenv("DEMO_PRIYA_PHONE", "+919800000004"),
             categories_owned=["appointment", "medical"],
+            language="en",
         )
         amit = Member(
             household_id=household.id,
@@ -74,6 +78,7 @@ async def seed_data():
             telegram_id="amit_del",
             phone=os.getenv("DEMO_AMIT_PHONE", "+919800000005"),
             categories_owned=["pension", "govt_letter"],
+            language="en",
         )
 
         db.add_all([baba, aai, rohan, priya, amit])
