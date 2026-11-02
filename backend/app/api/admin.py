@@ -104,7 +104,6 @@ async def simulate_ingest(
     async with AsyncSessionLocal() as db:
         artifact = Artifact(
             household_id=req.household_id,
-            source="simulate",
             type=art_type,
             file_url=file_url,
             raw_text=req.raw_text,
