@@ -11,12 +11,13 @@ import { AuditLogModal } from "./AuditLogModal";
 import { SimulateModal } from "./SimulateModal";
 import { HealthPanel } from "./HealthPanel";
 import { FastForward, Sparkles, Activity, RotateCcw, AlertTriangle, CheckCircle2, HeartPulse, CheckSquare } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
-const COLUMNS: { statuses: TaskStatus[]; label: string; color: string }[] = [
-  { statuses: ["new", "confirmed", "escalated"], label: "New & Pending", color: "bg-blue-50/70 border-blue-200" },
-  { statuses: ["needs_review"], label: "Needs Confirmation", color: "bg-amber-50/70 border-amber-200" },
-  { statuses: ["claimed"], label: "Claimed by Sibling", color: "bg-purple-50/70 border-purple-200" },
-  { statuses: ["done"], label: "Done & Verified", color: "bg-emerald-50/70 border-emerald-200" },
+const COLUMNS: { statuses: TaskStatus[]; labelKey: string; color: string }[] = [
+  { statuses: ["new", "confirmed", "escalated"], labelKey: "col_new", color: "bg-blue-50/70 border-blue-200" },
+  { statuses: ["needs_review"], labelKey: "col_needs_review", color: "bg-amber-50/70 border-amber-200" },
+  { statuses: ["claimed"], labelKey: "col_claimed", color: "bg-purple-50/70 border-purple-200" },
+  { statuses: ["done"], labelKey: "col_done", color: "bg-emerald-50/70 border-emerald-200" },
 ];
 
 interface BoardProps {
@@ -25,6 +26,7 @@ interface BoardProps {
 
 export function Board({ householdId }: BoardProps) {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<"tasks" | "health">("tasks");
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isAuditOpen, setIsAuditOpen] = useState(false);
@@ -66,7 +68,7 @@ export function Board({ householdId }: BoardProps) {
   if (tasksLoading && tasks.length === 0) {
     return (
       <div className="flex items-center justify-center h-64 text-gray-400">
-        Loading family coordination board…
+        {t("loading")}
       </div>
     );
   }
@@ -83,25 +85,23 @@ export function Board({ householdId }: BoardProps) {
           <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
             <button
               onClick={() => setActiveTab("tasks")}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "tasks"
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${activeTab === "tasks"
                   ? "bg-white text-gray-900 shadow-2xs"
                   : "text-gray-600 hover:text-gray-900"
-              }`}
+                }`}
             >
               <CheckSquare size={13} />
-              Tasks / कामे
+              {t("tab_tasks")}
             </button>
             <button
               onClick={() => setActiveTab("health")}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "health"
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${activeTab === "health"
                   ? "bg-white text-rose-600 shadow-2xs"
                   : "text-gray-600 hover:text-gray-900"
-              }`}
+                }`}
             >
               <HeartPulse size={13} />
-              Health / आरोग्य
+              {t("tab_health")}
             </button>
           </div>
 
@@ -121,7 +121,7 @@ export function Board({ householdId }: BoardProps) {
             className="flex items-center gap-1.5 text-xs font-semibold bg-brand-500 hover:bg-brand-600 text-white rounded-lg px-3 py-1.5 transition-colors shadow-2xs cursor-pointer"
           >
             <Sparkles size={14} />
-            Try Live Agent
+            {t("try_live_agent")}
           </button>
 
           <button
@@ -131,7 +131,7 @@ export function Board({ householdId }: BoardProps) {
             title="Simulate advancing clock by 3 days to test escalation near deadline"
           >
             <FastForward size={14} />
-            {escalateMutation.isPending ? "Fast-forwarding…" : "Simulate 3 Days Later"}
+            {escalateMutation.isPending ? "Fast-forwarding…" : t("simulate_3_days")}
           </button>
 
           <button
@@ -140,7 +140,7 @@ export function Board({ householdId }: BoardProps) {
             title="Inspect append-only agent decision audit log"
           >
             <Activity size={14} />
-            Audit Log
+            {t("audit_log")}
           </button>
 
           <button
@@ -164,8 +164,8 @@ export function Board({ householdId }: BoardProps) {
               const colTasks = tasks.filter((t) => col.statuses.includes(t.status));
               return (
                 <TaskColumn
-                  key={col.label}
-                  label={col.label}
+                  key={col.labelKey}
+                  label={t(col.labelKey)}
                   colorClass={col.color}
                   tasks={colTasks}
                   members={members}

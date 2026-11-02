@@ -27,6 +27,7 @@ import {
   Shield,
   Trash2,
 } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 interface HealthPanelProps {
   householdId: number;
@@ -35,6 +36,7 @@ interface HealthPanelProps {
 
 export function HealthPanel({ householdId, members }: HealthPanelProps) {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   const parents = members.filter((m) => m.role === "parent");
   const children = members.filter((m) => m.role === "child");
@@ -157,7 +159,7 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
               <Pill size={18} />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-gray-900">Today's Medicines (आजची औषधे)</h2>
+              <h2 className="text-base font-semibold text-gray-900">{t("todays_medicines")}</h2>
               <p className="text-xs text-gray-500">Live dose schedule & WhatsApp reminder status</p>
             </div>
           </div>
@@ -213,7 +215,7 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
             <HeartPulse size={18} />
           </div>
           <div>
-            <h2 className="text-base font-semibold text-gray-900">Health Readings (मागील १४ दिवस)</h2>
+            <h2 className="text-base font-semibold text-gray-900">{t("vitals_14_days")}</h2>
             <p className="text-xs text-gray-500">Reported via WhatsApp voice notes & messages with verbatim evidence</p>
           </div>
         </div>
@@ -321,7 +323,7 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
               <Shield size={18} />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-gray-900">Family Limits (कुटुंबाने ठरवलेली मर्यादा)</h2>
+              <h2 className="text-base font-semibold text-gray-900">{t("family_limits")}</h2>
               <p className="text-xs text-gray-500">Alerts siblings when readings cross limits set by family doctor</p>
             </div>
           </div>
@@ -459,7 +461,7 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
               <Pill size={18} />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-gray-900">Medicines Setup (औषधांची माहिती)</h2>
+              <h2 className="text-base font-semibold text-gray-900">{t("medicines_setup")}</h2>
               <p className="text-xs text-gray-500">Entered by children with reminder times and escalation owner</p>
             </div>
           </div>
@@ -590,7 +592,7 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
       {/* 5. Footer Medical Disclaimer */}
       <footer className="pt-4 border-t border-gray-200 text-center">
         <p className="text-xs text-gray-400">
-          Saath records what your family reports. It does not give medical advice.
+          {t("health_disclaimer")}
         </p>
       </footer>
     </div>

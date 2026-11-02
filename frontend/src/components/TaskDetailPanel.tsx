@@ -7,6 +7,7 @@ import { format, parseISO } from "date-fns";
 import clsx from "clsx";
 import { X, CheckCircle2, User } from "lucide-react";
 import { EvidenceHighlight } from "./EvidenceHighlight";
+import { useI18n } from "@/lib/i18n";
 
 interface TaskDetailPanelProps {
   task: Task;
@@ -14,15 +15,9 @@ interface TaskDetailPanelProps {
   onClose: () => void;
 }
 
-const FIELD_LABELS: Record<string, string> = {
-  amount:   "Amount",
-  due_date: "Due date",
-  payee:    "Payee",
-  title:    "Title",
-};
-
 export function TaskDetailPanel({ task, members, onClose }: TaskDetailPanelProps) {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [activeField, setActiveField] = useState<string | null>(null);
 
   const claimMutation = useMutation({
@@ -57,7 +52,7 @@ export function TaskDetailPanel({ task, members, onClose }: TaskDetailPanelProps
         {/* Fields with evidence */}
         <section>
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
-            Extracted Fields
+            {t("extracted_fields")}
           </p>
           <div className="space-y-2">
             {(["amount", "due_date", "payee"] as const).map((field) => {
@@ -80,15 +75,15 @@ export function TaskDetailPanel({ task, members, onClose }: TaskDetailPanelProps
                   )}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-gray-500">{FIELD_LABELS[field]}</span>
+                    <span className="text-xs text-gray-500">{t(`field_${field}`)}</span>
                     {evidence && (
                       <span className="text-[10px] text-brand-600 font-medium">
-                        {isActive ? "▲ Hide quote" : "▼ Show quote"}
+                        {isActive ? t("hide_quote") : t("show_quote")}
                       </span>
                     )}
                   </div>
                   <p className="text-sm font-medium text-gray-800 mt-0.5">
-                    {value ?? <span className="text-gray-400 font-normal italic">Not found</span>}
+                    {value ?? <span className="text-gray-400 font-normal italic">{t("not_found")}</span>}
                   </p>
                 </button>
               );
@@ -108,7 +103,7 @@ export function TaskDetailPanel({ task, members, onClose }: TaskDetailPanelProps
         {task.evidence_items.length > 0 && (
           <section>
             <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
-              All Evidence ({task.evidence_items.length})
+              {t("all_evidence", { count: task.evidence_items.length })}
             </p>
             <div className="space-y-2">
               {task.evidence_items.map((ev) => (
@@ -117,7 +112,7 @@ export function TaskDetailPanel({ task, members, onClose }: TaskDetailPanelProps
                   className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2"
                 >
                   <span className="text-[10px] font-medium uppercase tracking-wider text-gray-400">
-                    {FIELD_LABELS[ev.field_name] ?? ev.field_name}
+                    {t(`field_${ev.field_name}`)}
                   </span>
                   <p className="text-xs text-gray-700 mt-0.5 font-mono leading-relaxed">
                     "…{ev.quoted_span}…"
@@ -131,7 +126,7 @@ export function TaskDetailPanel({ task, members, onClose }: TaskDetailPanelProps
         {/* Assignee */}
         <section>
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">
-            Assigned to
+            {t("assigned_to")}
           </p>
           {assignee ? (
             <div className="flex items-center gap-2">
@@ -142,7 +137,7 @@ export function TaskDetailPanel({ task, members, onClose }: TaskDetailPanelProps
               <span className="text-xs text-gray-400 capitalize">({assignee.role})</span>
             </div>
           ) : (
-            <span className="text-sm text-gray-400 italic">Unassigned</span>
+            <span className="text-sm text-gray-400 italic">{t("unassigned")}</span>
           )}
         </section>
 
@@ -150,7 +145,7 @@ export function TaskDetailPanel({ task, members, onClose }: TaskDetailPanelProps
         {task.confidence !== null && (
           <section>
             <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">
-              Agent confidence
+              {t("agent_confidence")}
             </p>
             <div className="flex items-center gap-3">
               <div className="flex-1 bg-gray-200 rounded-full h-1.5">
@@ -179,7 +174,7 @@ export function TaskDetailPanel({ task, members, onClose }: TaskDetailPanelProps
             disabled={claimMutation.isPending}
             className="btn-primary flex-1"
           >
-            {claimMutation.isPending ? "Claiming…" : "Claim task"}
+            {claimMutation.isPending ? t("claiming") : t("claim_task")}
           </button>
         )}
         {(task.status === "claimed" || task.status === "confirmed") && (
@@ -189,7 +184,7 @@ export function TaskDetailPanel({ task, members, onClose }: TaskDetailPanelProps
             className="flex-1 bg-green-600 hover:bg-green-700 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-1.5"
           >
             <CheckCircle2 size={14} />
-            {doneMutation.isPending ? "Marking…" : "Mark done"}
+            {doneMutation.isPending ? t("marking") : t("mark_done")}
           </button>
         )}
       </div>

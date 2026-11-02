@@ -4,6 +4,7 @@ import { type Task, type Member } from "@/lib/api";
 import { format, parseISO, isPast } from "date-fns";
 import clsx from "clsx";
 import { AlertCircle, Calendar, IndianRupee, Paperclip } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 const CATEGORY_LABELS: Record<string, string> = {
   bill:        "Bill",
@@ -46,6 +47,7 @@ interface TaskCardProps {
 }
 
 export function TaskCard({ task, members, isSelected, onClick }: TaskCardProps) {
+  const { t } = useI18n();
   const assignee = members.find((m) => m.id === task.assignee_id);
   const dueDate = task.due_date ? parseISO(task.due_date) : null;
   const overdue = dueDate ? isPast(dueDate) && task.status !== "done" : false;
@@ -113,13 +115,13 @@ export function TaskCard({ task, members, isSelected, onClick }: TaskCardProps) 
         {task.status === "needs_review" && (
           <span className="flex items-center gap-0.5 text-yellow-600 font-medium">
             <AlertCircle size={11} />
-            Review
+            {t("review")}
           </span>
         )}
         {task.status === "escalated" && (
           <span className="flex items-center gap-0.5 text-red-600 font-bold bg-red-100 px-1.5 py-0.5 rounded text-[10px]">
             <AlertCircle size={10} />
-            ESCALATED
+            {t("escalated")}
           </span>
         )}
       </div>
@@ -137,7 +139,7 @@ export function TaskCard({ task, members, isSelected, onClick }: TaskCardProps) 
       {/* Low confidence warning */}
       {task.confidence !== null && task.confidence < 0.6 && (
         <p className="mt-2 text-[10px] text-yellow-600 bg-yellow-50 rounded px-1.5 py-0.5">
-          Low confidence · {Math.round((task.confidence ?? 0) * 100)}%
+          {t("low_confidence", { percent: Math.round((task.confidence ?? 0) * 100) })}
         </p>
       )}
     </button>
