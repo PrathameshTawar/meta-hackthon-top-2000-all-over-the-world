@@ -97,19 +97,16 @@ async def simulate_ingest(
     _: None = Depends(verify_admin_auth),
 ):
     """Simulate an incoming artifact (voice or image) hitting the agent."""
-    if req.type == "voice":
-        art_type = ArtifactType.voice
-    elif req.type == "image":
-        art_type = ArtifactType.image
-    else:
-        art_type = ArtifactType.text
+    # Anything that isn't voice is treated as already-OCR'd document text.
+    art_type = ArtifactType.voice if req.type == "voice" else ArtifactType.image
+    file_url = req.file_url or "simulate://text"
 
     async with AsyncSessionLocal() as db:
         artifact = Artifact(
             household_id=req.household_id,
             source="simulate",
             type=art_type,
-            file_url=req.file_url,
+            file_url=file_url,
             raw_text=req.raw_text,
         )
         db.add(artifact)
@@ -121,6 +118,8 @@ async def simulate_ingest(
         _run_agent,
         artifact_id=art_id,
         household_id=req.household_id,
+        artifact_type=art_type.value,
+        file_url=file_url,
         chat_id=req.chat_id,
     )
 

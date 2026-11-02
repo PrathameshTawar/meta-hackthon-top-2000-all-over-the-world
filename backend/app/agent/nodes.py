@@ -306,9 +306,9 @@ def _heuristic_extract(raw_text: str) -> dict:
 
     # 1. Amount Extraction
     amt_patterns = [
-        r"(?:₹|Rs\.?|INR)\s*[\d,]+(?:\.\d+)?",
-        r"[\d,]+(?:\.\d+)?\s*(?:रुपये|रु\.?)",
-        r"(?:Amount|Premium|EMI|रक्कम)[^\d\n]{0,20}((?:₹|Rs\.?|INR)?\s*[\d,]+(?:\.\d+)?)",
+        r"(?:₹|Rs\.?|INR)\s*[0-9०-९,]+(?:\.[0-9०-९]+)?",
+        r"[0-9०-९,]+(?:\.[0-9०-९]+)?\s*(?:रुपये|रु\.?)",
+        r"(?:Amount|Premium|EMI|रक्कम)[^\d०-९\n]{0,20}((?:₹|Rs\.?|INR)?\s*[0-9०-९,]+(?:\.[0-9०-९]+)?)",
     ]
     for pattern in amt_patterns:
         match = re.search(pattern, raw_text, re.IGNORECASE)
@@ -316,10 +316,12 @@ def _heuristic_extract(raw_text: str) -> dict:
             quote = match.group(0).strip()
             if match.groups() and match.group(1):
                 quote = match.group(1).strip()
-            digits = re.sub(r"[^\d]", "", quote)
-            if digits:
+            amt_num = to_amount(quote)
+            if amt_num is not None:
+                int_val = int(amt_num)
+                val_str = f"₹{int_val:,}" if amt_num.is_integer() else f"₹{amt_num:,.2f}"
                 extracted["amount"] = {
-                    "value": f"₹{int(digits):,}",
+                    "value": val_str,
                     "quote": quote,
                 }
                 break

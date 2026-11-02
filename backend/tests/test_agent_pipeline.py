@@ -1287,3 +1287,27 @@ async def test_p3_19_empty_admin_secret_returns_503(monkeypatch):
         res2 = await client.post("/admin/escalate/simulate", headers={"X-Admin-Token": "some-token"})
         assert res2.status_code == 503, f"Expected 503 when admin_secret is empty, got {res2.status_code}"
         assert "ADMIN_SECRET not configured" in res2.json().get("detail", "")
+
+
+@pytest.mark.asyncio
+async def test_simulate_ingest_creates_artifact_and_queues_agent(monkeypatch):
+    """Regression: 'Try Live Agent' endpoint must not 500 (bad Artifact kwargs, missing _run_agent args)."""
+    from fastapi import BackgroundTasks
+    from app.api import admin
+    from app.db.models import Artifact
+    from app.db.session import AsyncSessionLocal
+
+    req = admin.SimulateIngestRequest(household_id=1, type="text", raw_text="Adani Electricity Rs 2,310 pay by 21-11-2099")
+    bg = BackgroundTasks()
+    res = await admin.simulate_ingest(req, bg, None)
+    async with AsyncSessionLocal() as db:
+        art = await db.get(Artifact, res["artifact_id"])
+    assert art.raw_text.startswith("Adani") and art.file_url
+    kwargs = bg.tasks[0].kwargs
+    assert kwargs["artifact_type"] == "image" and kwargs["file_url"] == art.file_url
+
+
+def test_heuristic_amount_keeps_decimal_point():
+    from app.agent.nodes import _heuristic_extract
+    assert _heuristic_extract("Amount payable Rs 2,310.00\nPay by 21-11-2099")["amount"]["value"] == "₹2,310"
+    assert _heuristic_extract("एकूण देय रक्कम: ₹१,८४०")["amount"]["value"] == "₹1,840"
