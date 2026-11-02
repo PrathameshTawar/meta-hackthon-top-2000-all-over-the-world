@@ -543,8 +543,13 @@ async def _run_agent(artifact_id: int, household_id: int, artifact_type: str, fi
 @telegram_router.post("/telegram")
 async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
     secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
-    if settings.telegram_webhook_secret and secret != settings.telegram_webhook_secret:
-        raise HTTPException(status_code=403, detail="Invalid secret token")
+    if (
+        not settings.telegram_webhook_secret
+        or not secret
+        or not hmac.compare_digest(secret, settings.telegram_webhook_secret)
+    ):
+        logger.warning("Telegram webhook rejected: secret unset or token mismatch")
+        raise HTTPException(status_code=403, detail="Invalid or missing secret token")
 
     body = await request.json()
 

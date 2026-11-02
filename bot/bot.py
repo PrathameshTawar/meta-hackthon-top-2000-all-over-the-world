@@ -19,6 +19,20 @@ logger = logging.getLogger("saath-bot")
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")
+
+
+def build_forward_request(
+    update: dict,
+    backend_url: str = BACKEND_URL,
+    webhook_secret: str = TELEGRAM_WEBHOOK_SECRET,
+) -> tuple[str, dict, dict]:
+    """Build URL, payload, and secure headers for forwarding an update to the backend."""
+    url = f"{backend_url}/webhook/telegram"
+    headers = {}
+    if webhook_secret:
+        headers["X-Telegram-Bot-Api-Secret-Token"] = webhook_secret
+    return url, update, headers
 
 
 async def send_telegram_nudge_with_claim(chat_id: str | int, task_id: int, title: str, amount: str, due_date: str):
@@ -78,9 +92,11 @@ async def poll_telegram():
 
                         # Forward all updates (messages, callback queries) to backend webhook
                         try:
+                            req_url, req_data, req_headers = build_forward_request(update)
                             await client.post(
-                                f"{BACKEND_URL}/webhook/telegram",
-                                json=update,
+                                req_url,
+                                json=req_data,
+                                headers=req_headers,
                             )
                         except Exception as post_err:
                             logger.error(f"Failed to forward update to backend: {post_err}")
