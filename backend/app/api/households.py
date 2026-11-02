@@ -4,9 +4,10 @@ from pydantic import BaseModel
 from typing import Optional
 
 from app.db.session import get_db
+from app.api.admin import verify_admin_auth
 from app.db.models import Household
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_admin_auth)])
 
 
 class HouseholdOut(BaseModel):

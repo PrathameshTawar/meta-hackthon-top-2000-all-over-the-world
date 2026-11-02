@@ -49,7 +49,6 @@ app.include_router(admin.router, prefix="/admin", tags=["admin"])
 app.include_router(health.router, prefix="/health", tags=["health"])
 
 
-@app.get("/health")
 @app.get("/healthz")
 async def health_check():
     return {

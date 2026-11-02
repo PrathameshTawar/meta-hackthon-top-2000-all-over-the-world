@@ -74,18 +74,19 @@ async def test_member_language_api():
             await db.refresh(member)
             member_id = member.id
 
+        headers = {"X-Admin-Token": settings.admin_secret or "saath_admin_secret_demo"}
         # Valid change to Hindi
-        resp = await client.patch(f"/members/{member_id}/language", json={"language": "hi"})
+        resp = await client.patch(f"/members/{member_id}/language", json={"language": "hi"}, headers=headers)
         assert resp.status_code == 200
         assert resp.json()["language"] == "hi"
 
         # Valid change to Marathi
-        resp = await client.patch(f"/members/{member_id}/language", json={"language": "mr"})
+        resp = await client.patch(f"/members/{member_id}/language", json={"language": "mr"}, headers=headers)
         assert resp.status_code == 200
         assert resp.json()["language"] == "mr"
 
         # Invalid language code
-        resp = await client.patch(f"/members/{member_id}/language", json={"language": "fr"})
+        resp = await client.patch(f"/members/{member_id}/language", json={"language": "fr"}, headers=headers)
         assert resp.status_code == 422
 
 

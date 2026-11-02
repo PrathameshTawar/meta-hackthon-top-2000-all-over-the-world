@@ -6,8 +6,9 @@ from typing import Optional, List
 
 from app.db.session import get_db
 from app.db.models import Member, MemberRole
+from app.api.admin import verify_admin_auth
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_admin_auth)])
 
 
 class MemberOut(BaseModel):

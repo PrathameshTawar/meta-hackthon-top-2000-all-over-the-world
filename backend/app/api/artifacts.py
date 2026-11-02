@@ -6,9 +6,10 @@ from typing import Optional
 from datetime import datetime
 
 from app.db.session import get_db
+from app.api.admin import verify_admin_auth
 from app.db.models import Artifact
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_admin_auth)])
 
 
 class ArtifactOut(BaseModel):

@@ -6,9 +6,10 @@ from typing import Optional, Any
 from datetime import datetime
 
 from app.db.session import get_db
+from app.api.admin import verify_admin_auth
 from app.db.models import Event
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_admin_auth)])
 
 
 class EventOut(BaseModel):
