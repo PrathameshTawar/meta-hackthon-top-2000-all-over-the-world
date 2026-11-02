@@ -5,6 +5,7 @@ Uses India Standard Time (Asia/Kolkata, UTC+5:30) for accurate midnight date com
 Also provides a simulation runner for the 'simulate 3 days later' demo button.
 """
 from datetime import datetime, timezone, timedelta
+from typing import Optional
 import logging
 import httpx
 from sqlalchemy import select
@@ -21,6 +22,43 @@ def get_ist_now() -> datetime:
     """Return timezone-aware current time in India (IST, UTC+5:30)."""
     ist = timezone(timedelta(hours=5, minutes=30))
     return datetime.now(ist)
+
+
+def is_in_quiet_hours(member: Member, now_dt: Optional[datetime] = None) -> bool:
+    """
+    Check if current time falls within the member's configured quiet hours.
+    Allows siblings living abroad (e.g. US, UK) to avoid getting woken up at night
+    for non-urgent escalations.
+    """
+    tz_str = getattr(member, "timezone", None) or "Asia/Kolkata"
+    try:
+        from zoneinfo import ZoneInfo
+        member_tz = ZoneInfo(tz_str)
+    except Exception:
+        member_tz = timezone(timedelta(hours=5, minutes=30))
+
+    if now_dt is None:
+        now_utc = datetime.now(timezone.utc)
+    elif now_dt.tzinfo is None:
+        now_utc = now_dt.replace(tzinfo=timezone(timedelta(hours=5, minutes=30))).astimezone(timezone.utc)
+    else:
+        now_utc = now_dt.astimezone(timezone.utc)
+
+    local_dt = now_utc.astimezone(member_tz)
+    local_hour = local_dt.hour
+
+    start_h = getattr(member, "quiet_hours_start", 22)
+    end_h = getattr(member, "quiet_hours_end", 7)
+    if start_h is None:
+        start_h = 22
+    if end_h is None:
+        end_h = 7
+
+    if start_h > end_h:
+        return local_hour >= start_h or local_hour < end_h
+    elif start_h < end_h:
+        return start_h <= local_hour < end_h
+    return False
 
 
 async def _send_telegram(chat_id: str, text: str):
@@ -81,6 +119,13 @@ async def run_escalation(simulated_days_ahead: int = 0) -> list[int]:
             )
 
             for child in children:
+                if is_in_quiet_hours(child, now):
+                    logger.info(
+                        f"Skipping non-urgent escalation to {child.name} during local quiet hours "
+                        f"(timezone: {getattr(child, 'timezone', 'Asia/Kolkata')})"
+                    )
+                    continue
+
                 await notify(
                     member=child,
                     text=message,

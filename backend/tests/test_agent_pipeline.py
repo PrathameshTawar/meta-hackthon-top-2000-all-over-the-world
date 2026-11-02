@@ -1311,3 +1311,111 @@ def test_heuristic_amount_keeps_decimal_point():
     from app.agent.nodes import _heuristic_extract
     assert _heuristic_extract("Amount payable Rs 2,310.00\nPay by 21-11-2099")["amount"]["value"] == "₹2,310"
     assert _heuristic_extract("एकूण देय रक्कम: ₹१,८४०")["amount"]["value"] == "₹1,840"
+
+
+@pytest.mark.asyncio
+async def test_scam_guardrail_refusal_and_sibling_alert(monkeypatch):
+    """
+    Tier 2 Test: Safe scam reply.
+    If a forwarded message mentions OTP, KYC or 'account blocked',
+    reply "Don't share any OTP; I've asked Rohan to check" and alert a sibling.
+    """
+    from app.agent.nodes import node_classify, node_scam_guardrail
+    import app.agent.nodes as nodes_module
+
+    notified = []
+    async def mock_notify(**kwargs):
+        notified.append(kwargs)
+    monkeypatch.setattr(nodes_module, "notify", mock_notify)
+
+    # 1. Classification check
+    scam_msg = "Forwarded: Dear customer, your SBI account is blocked. Update KYC immediately or share OTP."
+    c_res = await node_classify({"raw_text": scam_msg})
+    assert c_res["category"] == "scam_alert"
+
+    # 2. Execution check
+    state = {
+        "raw_text": scam_msg,
+        "household_id": 1,
+    }
+    res = await node_scam_guardrail(state)
+    assert "Don't share any OTP; I've asked Rohan to check" in res["parent_reply"]
+    assert len(notified) > 0, "Sibling must be alerted via notify()"
+    assert "Scam/Fraud Warning" in notified[0]["text"]
+
+    # 3. Marathi version
+    marathi_scam = "तुमचे वीज खाते बंद केले जाईल. त्वरित केवायसी करा आणि ओटीपी पाठवा."
+    c_res_mr = await node_classify({"raw_text": marathi_scam})
+    assert c_res_mr["category"] == "scam_alert"
+
+
+@pytest.mark.asyncio
+async def test_sibling_quiet_hours_and_timezones():
+    """
+    Tier 2 Test: Quiet hours & timezones for siblings abroad.
+    Non-urgent escalations must be deferred during local night hours.
+    """
+    from datetime import datetime, timezone
+    from app.db.models import Member, MemberRole
+    from app.scheduler.escalation import is_in_quiet_hours
+
+    # Sibling in New York (UTC-4/UTC-5)
+    ny_sibling = Member(
+        household_id=1,
+        name="Priya (US)",
+        role=MemberRole.child,
+        timezone="America/New_York",
+        quiet_hours_start=22,
+        quiet_hours_end=7,
+    )
+
+    # 3:00 AM New York time (08:00 UTC) -> should be in quiet hours
+    dt_night = datetime(2026, 11, 2, 8, 0, tzinfo=timezone.utc)
+    assert is_in_quiet_hours(ny_sibling, dt_night) is True
+
+    # 2:00 PM New York time (19:00 UTC) -> should NOT be in quiet hours
+    dt_day = datetime(2026, 11, 2, 19, 0, tzinfo=timezone.utc)
+    assert is_in_quiet_hours(ny_sibling, dt_day) is False
+
+
+@pytest.mark.asyncio
+async def test_parent_first_photo_privacy_reassurance():
+    """
+    Tier 2 Test: Send privacy reassurance on parent's first photo upload.
+    One line in their language saying only family sees it.
+    """
+    import random
+    from app.agent.nodes import node_draft
+    from app.db.models import Household, Artifact, ArtifactType
+    from app.db.session import AsyncSessionLocal
+
+    h_id = random.randint(50000, 99999)
+    async with AsyncSessionLocal() as db:
+        hh = Household(id=h_id, name="Privacy Test Family", primary_language="mr")
+        db.add(hh)
+        # First photo artifact
+        art = Artifact(
+            household_id=h_id,
+            type=ArtifactType.image,
+            file_url="test://bill_photo.jpg",
+            raw_text="Tata Power Bill",
+        )
+        db.add(art)
+        await db.commit()
+
+    draft_res = await node_draft({
+        "household_id": h_id,
+        "artifact_type": "image",
+        "category": "bill",
+        "extracted": {
+            "title": {"value": "टाटा पॉवर वीज बिल"},
+            "amount": {"value": "₹1,450"},
+            "due_date": {"value": "2026-11-20T00:00:00"},
+            "payee": {"value": "Tata Power"},
+        },
+    })
+    parent_reply = draft_res["parent_reply"]
+    assert "फक्त तुमच्या कुटुंबातील सदस्यांनाच दिसेल" in parent_reply, (
+        f"Expected privacy reassurance in Marathi for first photo upload, got: {parent_reply}"
+    )
+

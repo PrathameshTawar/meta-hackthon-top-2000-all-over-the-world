@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Optional, List
 
 from sqlalchemy import (
-    String, Text, Numeric, DateTime, ForeignKey,
+    String, Text, Numeric, DateTime, ForeignKey, Integer,
     Enum as SAEnum, JSON, UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -102,6 +102,9 @@ class Member(Base):
     # JSON list of TaskCategory strings this member "owns"
     categories_owned: Mapped[Optional[list]] = mapped_column(JSON, default=list)
     language: Mapped[str] = mapped_column(String(10), default="mr", nullable=False)
+    timezone: Mapped[Optional[str]] = mapped_column(String(50), default="Asia/Kolkata", nullable=True)
+    quiet_hours_start: Mapped[Optional[int]] = mapped_column(Integer, default=22, nullable=True)
+    quiet_hours_end: Mapped[Optional[int]] = mapped_column(Integer, default=7, nullable=True)
 
     household: Mapped["Household"] = relationship(back_populates="members")
     assigned_tasks: Mapped[List["Task"]] = relationship(back_populates="assignee")

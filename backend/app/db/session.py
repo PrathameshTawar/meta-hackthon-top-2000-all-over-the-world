@@ -47,6 +47,12 @@ async def init_db():
         cols = [row[1] for row in res.fetchall()]
         if cols and "language" not in cols:
             sync_conn.execute(text("ALTER TABLE members ADD COLUMN language VARCHAR(10) DEFAULT 'mr'"))
+        if cols and "timezone" not in cols:
+            sync_conn.execute(text("ALTER TABLE members ADD COLUMN timezone VARCHAR(50) DEFAULT 'Asia/Kolkata'"))
+        if cols and "quiet_hours_start" not in cols:
+            sync_conn.execute(text("ALTER TABLE members ADD COLUMN quiet_hours_start INTEGER DEFAULT 22"))
+        if cols and "quiet_hours_end" not in cols:
+            sync_conn.execute(text("ALTER TABLE members ADD COLUMN quiet_hours_end INTEGER DEFAULT 7"))
 
     try:
         async with engine.begin() as conn:

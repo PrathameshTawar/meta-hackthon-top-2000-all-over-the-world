@@ -56,6 +56,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     "agent_confidence": "Agent confidence",
     "low_confidence": "Low confidence · {percent}%",
     "escalated": "ESCALATED",
+    "stale_claim": "Claimed 2+ days ago · No progress",
     "review": "Review",
     "loading": "Loading family coordination board…",
 
@@ -116,6 +117,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     "agent_confidence": "विश्वासार्हता",
     "low_confidence": "कमी विश्वासार्हता · {percent}%",
     "escalated": "तात्काळ",
+    "stale_claim": "दावा केला २+ दिवस झाले · प्रगती नाही",
     "review": "तपासा",
     "loading": "कुटुंब बोर्ड लोड होत आहे…",
 
@@ -176,6 +178,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     "agent_confidence": "एजेंट सटीकता",
     "low_confidence": "कम सटीकता · {percent}%",
     "escalated": "अति आवश्यक",
+    "stale_claim": "दावा किए २+ दिन हुए · कोई प्रगति नहीं",
     "review": "सत्यापित करें",
     "loading": "परिवार बोर्ड लोड हो रहा है…",
 

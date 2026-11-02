@@ -22,7 +22,7 @@ from typing import Any, Optional
 import unicodedata
 import httpx
 from openai import AsyncOpenAI
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 DEV_DIGITS = str.maketrans("०१२३४५६७८९", "0123456789")
 ZW = dict.fromkeys(map(ord, "\u200b\u200c\u200d\ufeff"))
@@ -55,7 +55,7 @@ def normalize_payee(payee: str) -> str:
 from app.agent.state import AgentState
 from app.config import settings
 from app.db.models import (
-    Artifact, Task, TaskCategory, TaskStatus, Evidence, Event, Member, MemberRole, Household,
+    Artifact, ArtifactType, Task, TaskCategory, TaskStatus, Evidence, Event, Member, MemberRole, Household,
     Vital, VitalThreshold, VitalKind, VitalOp
 )
 from app.db.session import AsyncSessionLocal
@@ -85,11 +85,26 @@ HINDI_MEDICAL = ["दवाई", "दवा", "गोली", "पर्चा",
 BILL_SIGNALS = ["bill", "invoice", "amount payable", "total amount", "बिल", "रक्कम", "देय", "राशि", "भुगतान"]
 AMOUNT_RE = re.compile(r"(?:₹|rs\.?|inr)\s*[\d०-९,]+", re.I)
 
+# Scam / fraud signals targeting elderly parents (OTP, KYC, account blocked)
+SCAM_SIGNALS = [
+    r"\b(?:otp|kyc)\b",
+    r"ओटीपी",
+    r"केवायसी",
+    r"account\s+(?:is\s+)?(?:blocked|suspended|deactivated)",
+    r"(?:खाते|अकाउंट)\s*(?:बंद|ब्लॉक|सस्पेंड)",
+]
+SCAM_RE = re.compile("|".join(SCAM_SIGNALS), re.IGNORECASE)
+
+def _is_scam_message(raw_text: str) -> bool:
+    if not raw_text:
+        return False
+    return bool(SCAM_RE.search(raw_text))
+
 CATEGORY_KEYWORDS = {
     TaskCategory.bill: [
         "bill", "electricity", "water", "gas", "power", "बिल", "वीज", "पाणी",
         "mahavitaran", "msedcl", "tata power", "टाटा पॉवर", "mseb", "mgl",
-        "mahanagar gas", "महानगर गॅस", "airtel", "bharat gas", "suyash", "मेन्टेनन्स"
+        "mahanagar gas", "महानगर गॅस", "airtel", "bharat gas", "मेन्टेनन्स"
     ],
     TaskCategory.loan_emi: [
         "emi", "loan", "कर्ज", "हप्ता", "credila", "repayment", "moratorium",
@@ -148,8 +163,6 @@ KNOWN_PAYEES = [
     ("Airtel", "Airtel"),
     ("Bharat Gas", "Bharat Gas"),
     ("भारत गॅस", "Bharat Gas"),
-    ("Suyash", "Suyash Co-op Housing Society"),
-    ("सोसायटीचे मेन्टेनन्स", "Suyash Co-op Housing Society"),
     ("महापालिका", "Pune Municipal Corporation"),
     ("PMC", "Pune Municipal Corporation"),
     ("Pune Municipal Corporation", "Pune Municipal Corporation"),
@@ -798,6 +811,10 @@ async def node_classify(state: AgentState) -> dict:
     if any(q in text_lower for q in ["काय बाकी आहे", "काय बाकी", "what is pending", "what's pending", "pending tasks"]):
         return {"category": "status_query"}
 
+    # Safe Scam / Phishing check (OTP, KYC, account blocked)
+    if _is_scam_message(raw_text):
+        return {"category": "scam_alert", "medical_context": False}
+
     # H-3: Vitals detection (after status query check, before bill/medical logic)
     diagnostic = (
         any(k in text_lower for k in MEDICAL_KEYWORDS + HINDI_MEDICAL)
@@ -892,6 +909,77 @@ async def node_status(state: AgentState) -> dict:
     return {
         "parent_reply": reply,
         "sibling_notification": "",
+    }
+
+
+async def node_scam_guardrail(state: AgentState) -> dict:
+    """
+    Safe Scam/Fraud Refusal:
+    If a message mentions OTP, KYC or "account blocked", refuse to process,
+    reply 'Don't share any OTP; I've asked Rohan to check', and alert a sibling immediately.
+    """
+    raw_text = state.get("raw_text", "")
+    household_id = state.get("household_id")
+
+    sibling_name = "Rohan"
+    children = []
+    lang = "mr"
+    if household_id:
+        async with AsyncSessionLocal() as db:
+            hh = await db.get(Household, household_id)
+            if hh and hh.primary_language:
+                lang = hh.primary_language
+
+            c_res = await db.execute(
+                select(Member).where(
+                    Member.household_id == household_id,
+                    Member.role == MemberRole.child,
+                )
+            )
+            children = c_res.scalars().all()
+            if children:
+                rohan_c = next((c for c in children if "rohan" in c.name.lower()), None)
+                raw_name = rohan_c.name if rohan_c else children[0].name
+                sibling_name = re.sub(r"\s*\(.*?\)", "", raw_name).strip() or "Rohan"
+
+    if lang == "hi":
+        parent_reply = f"⚠️ कोई भी OTP या जानकारी साझा न करें; मैंने {sibling_name} को जांच करने के लिए कहा है। (Don't share any OTP; I've asked {sibling_name} to check.)"
+    elif lang == "mr":
+        parent_reply = f"⚠️ काळजी घ्या: कोणताही OTP कोणाशीही शेअर करू नका; मी {sibling_name}ला तपासायला सांगितले आहे. (Don't share any OTP; I've asked {sibling_name} to check.)"
+    else:
+        parent_reply = f"⚠️ Don't share any OTP; I've asked {sibling_name} to check."
+
+    snippet = raw_text[:120].strip()
+    alert_text = (
+        f"🚨 Scam/Fraud Warning: A suspicious message mentioning OTP/KYC/account block was received: "
+        f"\"{snippet}\". We advised parent not to share any OTP. Please check in with them immediately."
+    )
+    for child in children:
+        try:
+            await notify(
+                member=child,
+                text=alert_text,
+                template_name="saath_scam_alert",
+                template_language="en_US",
+                template_params=[child.name, snippet[:50]],
+            )
+        except Exception as ex:
+            logger.warning(f"Failed to alert sibling of scam: {ex}")
+
+    await _log_event(
+        task_id=None,
+        household_id=household_id,
+        actor="agent:scam_guardrail",
+        action="scam_blocked",
+        reason="Suspicious message mentioning OTP/KYC/account block intercepted; parent warned and sibling alerted",
+        payload={"snippet": snippet},
+    )
+
+    return {
+        "parent_reply": parent_reply,
+        "sibling_notification": alert_text,
+        "call_script": None,
+        "category": "scam_alert",
     }
 
 
@@ -1800,6 +1888,28 @@ async def node_draft(state: AgentState) -> dict:
         )
         if state.get("medical_context"):
             parent_reply += " (टीप: मला वैद्यकीय अहवाल किंवा गोळ्यांचा अर्थ सांगता येणार नाही. कृपया हे तुमच्या डॉक्टरांशी शेअर करा.)"
+
+    # Privacy reassurance on parent's first uploaded photo/document
+    artifact_type = state.get("artifact_type")
+    household_id = state.get("household_id")
+    if artifact_type in ("image", "document", "photo") and household_id:
+        try:
+            async with AsyncSessionLocal() as db:
+                photo_count = await db.scalar(
+                    select(func.count(Artifact.id)).where(
+                        Artifact.household_id == household_id,
+                        Artifact.type == ArtifactType.image,
+                    )
+                )
+                if photo_count is not None and photo_count <= 1:
+                    if lang == "hi":
+                        parent_reply += "\n🔒 (यह फोटो केवल आपके परिवार के सदस्यों को ही दिखाई देगा।)"
+                    elif lang == "mr":
+                        parent_reply += "\n🔒 (टीप: हा फोटो फक्त तुमच्या कुटुंबातील सदस्यांनाच दिसेल.)"
+                    else:
+                        parent_reply += "\n🔒 (Note: This photo is private and visible only to your family members.)"
+        except Exception as e:
+            logger.warning(f"Failed to check first photo privacy reassurance: {e}")
 
     # Sibling notification formatted for instant action & smartwatch readability
     watch_header = f"📌 {title}"

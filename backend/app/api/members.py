@@ -18,6 +18,9 @@ class MemberOut(BaseModel):
     telegram_id: Optional[str]
     categories_owned: Optional[List[str]]
     language: str = "mr"
+    timezone: Optional[str] = "Asia/Kolkata"
+    quiet_hours_start: Optional[int] = 22
+    quiet_hours_end: Optional[int] = 7
 
     class Config:
         from_attributes = True
@@ -30,6 +33,9 @@ class MemberCreate(BaseModel):
     telegram_id: Optional[str] = None
     categories_owned: Optional[List[str]] = []
     language: Optional[str] = "mr"
+    timezone: Optional[str] = "Asia/Kolkata"
+    quiet_hours_start: Optional[int] = 22
+    quiet_hours_end: Optional[int] = 7
 
 
 class MemberUpdateLanguage(BaseModel):

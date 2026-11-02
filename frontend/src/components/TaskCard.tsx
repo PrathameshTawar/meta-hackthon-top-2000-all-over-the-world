@@ -1,9 +1,9 @@
 "use client";
 
 import { type Task, type Member } from "@/lib/api";
-import { format, parseISO, isPast } from "date-fns";
+import { format, parseISO, isPast, differenceInDays } from "date-fns";
 import clsx from "clsx";
-import { AlertTriangle, Calendar, IndianRupee, FileText, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, Calendar, IndianRupee, FileText, CheckCircle2, Clock } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
 const CATEGORY_STYLES: Record<string, { label: string; badge: string; rail: string }> = {
@@ -67,6 +67,10 @@ export function TaskCard({ task, members, isSelected, onClick }: TaskCardProps) 
   const dueDate = task.due_date ? parseISO(task.due_date) : null;
   const overdue = dueDate ? isPast(dueDate) && task.status !== "done" : false;
   const hasEvidence = task.evidence_items.length > 0;
+  const isStaleClaim =
+    task.status === "claimed" &&
+    task.updated_at &&
+    differenceInDays(new Date(), parseISO(task.updated_at)) >= 2;
   const style = CATEGORY_STYLES[task.category] ?? CATEGORY_STYLES.unknown;
 
   return (
@@ -156,6 +160,13 @@ export function TaskCard({ task, members, isSelected, onClick }: TaskCardProps) 
         <div className="mt-2 text-[10px] font-bold text-sindoor-800 bg-sindoor-100/90 border border-sindoor-300 rounded px-2 py-0.5 flex items-center gap-1">
           <AlertTriangle size={10} className="text-sindoor-600" />
           {t("escalated")} · Approaching Due Date
+        </div>
+      )}
+
+      {isStaleClaim && task.status !== "escalated" && (
+        <div className="mt-2 text-[10px] font-bold text-ochre-900 bg-ochre-100/90 border border-ochre-300 rounded px-2 py-0.5 flex items-center gap-1">
+          <Clock size={10} className="text-ochre-700" />
+          {t("stale_claim") || "Claimed 2+ days ago · No progress"}
         </div>
       )}
 
