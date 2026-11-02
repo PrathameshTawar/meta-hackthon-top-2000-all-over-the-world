@@ -1333,10 +1333,33 @@ async def test_scam_guardrail_refusal_and_sibling_alert(monkeypatch):
     c_res = await node_classify({"raw_text": scam_msg})
     assert c_res["category"] == "scam_alert"
 
-    # 2. Execution check
+    # 2. Execution check: create isolated test household, parent and child
+    from app.db.session import AsyncSessionLocal
+    from app.db.models import Household, Member, MemberRole
+    async with AsyncSessionLocal() as db:
+        hh = Household(name="Scam Test Household", primary_language="en")
+        db.add(hh)
+        await db.commit()
+        await db.refresh(hh)
+        child = Member(
+            household_id=hh.id,
+            name="Rohan",
+            role=MemberRole.child,
+            phone="+919876543210",
+        )
+        parent = Member(
+            household_id=hh.id,
+            name="Aai",
+            role=MemberRole.parent,
+            phone="+919876543211",
+        )
+        db.add_all([child, parent])
+        await db.commit()
+        test_hh_id = hh.id
+
     state = {
         "raw_text": scam_msg,
-        "household_id": 1,
+        "household_id": test_hh_id,
     }
     res = await node_scam_guardrail(state)
     assert "Don't share any OTP; I've asked Rohan to check" in res["parent_reply"]
