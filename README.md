@@ -209,6 +209,7 @@ python -m tests.run_eval --set all
 ## Prototype Limitations & Scope
 
 - **Single-Household Demo Focus:** In `frontend/src/app/page.tsx`, `HOUSEHOLD_ID = 1` is hard-coded for hackathon presentation simplicity. The underlying schema and API are fully multi-tenant and isolate data by `household_id`.
+- **Demo Access & Admin Security:** The web board uses an admin key configured via `NEXT_PUBLIC_ADMIN_SECRET` which is visible in client-side requests during hackathon evaluation. In production environments (`ENVIRONMENT=production`), destructive endpoints (`/admin/reset`, `/admin/reset-db`, `/admin/seed`) are strictly blocked with 403 Forbidden. Full per-user authentication (RBAC and OAuth/passkey) is planned for future post-hackathon release.
 - **Zero-Downtime Fallback:** Benchmark items can run against cached model responses or the deterministic heuristic baseline, ensuring full judge reproducibility without an active API subscription.
 - **No Direct Financial Transactions:** Saath tracks deadlines, coordinates siblings, and organizes family commitments; it never initiates banking transactions or provides investment advice.
 - **Strict Medical Boundary:** Diagnostic reports and prescriptions are strictly refused with an empathetic Marathi message directing the family to qualified medical professionals. Medical bills and insurance invoices are correctly tracked as financial tasks.

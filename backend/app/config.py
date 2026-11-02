@@ -20,6 +20,7 @@ class Settings(BaseSettings):
 
     # Security & Admin (Default empty string blocks unconfigured deployments with 503; configure via .env in dev/prod)
     admin_secret: str = ""
+    environment: str = "development"  # "development" | "production"
     cors_origins: List[str] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",

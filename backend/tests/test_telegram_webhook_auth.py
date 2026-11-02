@@ -58,3 +58,4 @@ def test_bot_forwarding_helper_includes_secret_header():
     assert req_url == "http://test-backend:8000/webhook/telegram"
     assert req_json == update
     assert req_headers.get("X-Telegram-Bot-Api-Secret-Token") == "my_secure_secret"
+

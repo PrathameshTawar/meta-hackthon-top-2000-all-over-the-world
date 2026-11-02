@@ -89,3 +89,4 @@ def test_all_non_webhook_routes_require_auth():
                     unprotected.append((method, path, res.status_code))
 
     assert not unprotected, f"Unprotected non-webhook routes found: {unprotected}"
+

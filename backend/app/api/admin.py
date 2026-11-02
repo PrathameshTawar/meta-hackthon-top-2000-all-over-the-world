@@ -1,3 +1,4 @@
+import hmac
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Request, Depends, Header
 from pydantic import BaseModel
 from typing import Optional, Any
@@ -29,7 +30,7 @@ async def verify_admin_auth(
     if not token and authorization and authorization.startswith("Bearer "):
         token = authorization.split("Bearer ")[-1].strip()
 
-    if token != settings.admin_secret:
+    if not token or not hmac.compare_digest(token, settings.admin_secret):
         raise HTTPException(
             status_code=401,
             detail="Unauthorized: Valid X-Admin-Token or Bearer token required for admin endpoints.",
@@ -78,6 +79,11 @@ async def admin_reset_db(
     _: None = Depends(verify_admin_auth),
 ):
     """Wipe database and re-seed with demo household (Bhosale family)."""
+    if settings.environment == "production":
+        raise HTTPException(
+            status_code=403,
+            detail="Destructive reset endpoints are disabled in production.",
+        )
     await reset_db()
     await seed_data()
     return {"status": "ok", "message": "Database reset and re-seeded with demo data."}
@@ -86,6 +92,11 @@ async def admin_reset_db(
 @router.post("/seed")
 async def trigger_seed(_: None = Depends(verify_admin_auth)):
     """Seed demo data if not already present."""
+    if settings.environment == "production":
+        raise HTTPException(
+            status_code=403,
+            detail="Destructive seed endpoints are disabled in production.",
+        )
     await seed_data()
     return {"status": "ok", "message": "Demo data checked/seeded."}
 

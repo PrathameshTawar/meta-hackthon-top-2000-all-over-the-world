@@ -1,13 +1,11 @@
 import axios from "axios";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-const ADMIN_TOKEN = process.env.NEXT_PUBLIC_ADMIN_SECRET ?? "saath_admin_secret_demo";
+const ADMIN_TOKEN = process.env.NEXT_PUBLIC_ADMIN_SECRET;
 
 export const api = axios.create({
   baseURL: BASE,
-  headers: {
-    "X-Admin-Token": ADMIN_TOKEN,
-  },
+  headers: ADMIN_TOKEN ? { "X-Admin-Token": ADMIN_TOKEN } : {},
 });
 
 // ---------------------------------------------------------------------------
