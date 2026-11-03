@@ -92,7 +92,7 @@ async def run_escalation(simulated_days_ahead: int = 0) -> list[int]:
         result = await db.execute(
             select(Task).where(
                 Task.due_date <= threshold_naive,
-                Task.status.in_([TaskStatus.new, TaskStatus.confirmed, TaskStatus.needs_review]),
+                Task.status.in_([TaskStatus.new, TaskStatus.confirmed, TaskStatus.needs_review, TaskStatus.escalated]),
             )
         )
         overdue_tasks = result.scalars().all()
@@ -106,6 +106,25 @@ async def run_escalation(simulated_days_ahead: int = 0) -> list[int]:
                 )
             )
             children = members_result.scalars().all()
+            if not children:
+                continue
+
+            # Query existing escalation_sent events for this task
+            events_result = await db.execute(
+                select(Event).where(
+                    Event.task_id == task.id,
+                    Event.action == "escalation_sent",
+                )
+            )
+            sent_events = events_result.scalars().all()
+            already_notified_member_ids = {
+                e.payload.get("member_id") for e in sent_events if e.payload and isinstance(e.payload, dict)
+            }
+
+            # If all children already notified, nothing left to do
+            unnotified_children = [c for c in children if c.id not in already_notified_member_ids]
+            if not unnotified_children:
+                continue
 
             task_due_ist = task.due_date.replace(tzinfo=timezone(timedelta(hours=5, minutes=30))) if task.due_date else now
             days_left = max(0, (task_due_ist - now).days)
@@ -118,7 +137,8 @@ async def run_escalation(simulated_days_ahead: int = 0) -> list[int]:
                 f"👉 Claim immediately on your Saath board: {settings.frontend_url}"
             )
 
-            for child in children:
+            any_sent_this_run = False
+            for child in unnotified_children:
                 if is_in_quiet_hours(child, now):
                     logger.info(
                         f"Skipping non-urgent escalation to {child.name} during local quiet hours "
@@ -135,20 +155,30 @@ async def run_escalation(simulated_days_ahead: int = 0) -> list[int]:
                     template_button_payload=f"claim:{task.id}",
                     template_language="en_US",
                 )
+                any_sent_this_run = True
+                db.add(Event(
+                    household_id=task.household_id,
+                    task_id=task.id,
+                    actor="scheduler:escalate",
+                    action="escalation_sent",
+                    reason=f"Escalation notification delivered to {child.name}",
+                    payload={"member_id": child.id, "days_left": days_left},
+                ))
 
-            # Update status
-            task.status = TaskStatus.escalated
-            escalated_ids.append(task.id)
-
-            # Add event to audit log
-            db.add(Event(
-                household_id=task.household_id,
-                task_id=task.id,
-                actor="scheduler:escalate",
-                action="escalated",
-                reason=f"Task unclaimed and due within {days_left} days",
-                payload={"days_left": days_left, "simulated_days_ahead": simulated_days_ahead, "watch_line": watch_line},
-            ))
+            # Only mark task escalated if at least one child was notified (now or previously)
+            if any_sent_this_run or len(already_notified_member_ids) > 0:
+                if task.status != TaskStatus.escalated:
+                    task.status = TaskStatus.escalated
+                    db.add(Event(
+                        household_id=task.household_id,
+                        task_id=task.id,
+                        actor="scheduler:escalate",
+                        action="escalated",
+                        reason=f"Task unclaimed and due within {days_left} days",
+                        payload={"days_left": days_left, "simulated_days_ahead": simulated_days_ahead, "watch_line": watch_line},
+                    ))
+                if any_sent_this_run and task.id not in escalated_ids:
+                    escalated_ids.append(task.id)
 
         await db.commit()
     return escalated_ids

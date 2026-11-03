@@ -478,7 +478,8 @@ async def test_p0_3_escalation_triggers_on_status_not_unassigned(monkeypatch):
         db.add(child)
         await db.flush()
 
-        now_ist = get_ist_now()
+        now_ist = datetime(2026, 11, 3, 14, 0, tzinfo=timezone(timedelta(hours=5, minutes=30)))
+        monkeypatch.setattr(esc_module, "get_ist_now", lambda: now_ist)
         # Task 1: Has assignee, status confirmed, due in 2 days (within escalation window)
         t_confirmed = Task(
             household_id=unique_h_id,
