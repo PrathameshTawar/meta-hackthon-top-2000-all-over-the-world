@@ -1,15 +1,15 @@
 # Web framework
-fastapi==0.115.0
+fastapi>=0.115.6
+starlette>=0.41.2
 uvicorn[standard]==0.30.6
 
-# Database
+# Database & Persistent Storage (SQLite local & Docker volume)
 sqlalchemy==2.1.6
-asyncpg==0.29.0
-alembic==1.13.3
+aiosqlite==0.22.1
+greenlet==3.5.6
 
 # Agent & Persistent Checkpoints
 langgraph==1.2.18
-langchain-core==1.7.3
 langgraph-checkpoint-sqlite==3.1.2
 
 # AI Models (Meta open-weight models via Baseten / Meta Model APIs)
@@ -20,15 +20,9 @@ httpx==0.27.2
 
 # Scheduler & Timezones
 apscheduler==3.10.4
-pytz==2026.5
 
 # Config
 pydantic-settings==2.5.2
-
-# Utilities
-python-multipart==0.0.12
-greenlet==3.5.6
-aiosqlite==0.22.1
 
 # Testing & Eval
 pytest==9.2.0
