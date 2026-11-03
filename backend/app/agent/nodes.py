@@ -606,29 +606,59 @@ async def node_perceive(state: AgentState) -> dict:
                         media = await http_c.get(meta.json()["url"], headers=headers)  # short-lived URL, token needed
                         media.raise_for_status()
                         file_bytes = media.content
-                elif file_url.startswith("http://") or file_url.startswith("https://"):
-                    async with httpx.AsyncClient(timeout=30) as http_c:
-                        resp = await http_c.get(file_url)
-                        if resp.status_code == 200:
-                            file_bytes = resp.content
-                elif os.path.exists(file_url):
-                    if file_url.lower().endswith(".pdf"):
-                        try:
-                            import pypdfium2 as pdfium
-                            pdf = pdfium.PdfDocument(file_url)
-                            page = pdf[0]
-                            bitmap = page.render(scale=2.0)
-                            pil_img = bitmap.to_pil()
-                            buf = io.BytesIO()
-                            pil_img.save(buf, format="PNG")
-                            file_bytes = buf.getvalue()
-                        except Exception as pe:
-                            logger.warning(f"Local PDF rendering failed: {pe}")
-                            with open(file_url, "rb") as f:
-                                file_bytes = f.read()
+                elif file_url.startswith("simulate://"):
+                    file_bytes = None
+                elif file_url and (os.path.isabs(file_url) or os.path.exists(file_url)):
+                    if settings.environment == "production":
+                        logger.warning(f"Local file access rejected in production: {file_url}")
+                        await _log_event(
+                            task_id=None,
+                            household_id=state.get("household_id"),
+                            actor="agent:perceive",
+                            action="file_access_blocked",
+                            reason=f"Local file access prohibited in production: {file_url}",
+                        )
                     else:
-                        with open(file_url, "rb") as f:
-                            file_bytes = f.read()
+                        real_p = os.path.realpath(file_url)
+                        eval_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", "..", "tests", "eval_set"))
+                        if os.path.commonpath([real_p, eval_dir]) == eval_dir:
+                            def _read_local_file(p: str) -> bytes:
+                                if p.lower().endswith(".pdf"):
+                                    try:
+                                        import pypdfium2 as pdfium
+                                        pdf = pdfium.PdfDocument(p)
+                                        page = pdf[0]
+                                        bitmap = page.render(scale=2.0)
+                                        pil_img = bitmap.to_pil()
+                                        buf = io.BytesIO()
+                                        pil_img.save(buf, format="PNG")
+                                        return buf.getvalue()
+                                    except Exception as pe:
+                                        logger.warning(f"Local PDF rendering failed: {pe}")
+                                        with open(p, "rb") as f:
+                                            return f.read()
+                                with open(p, "rb") as f:
+                                    return f.read()
+
+                            file_bytes = await asyncio.to_thread(_read_local_file, real_p)
+                        else:
+                            logger.warning(f"Local file access rejected outside eval_set: {real_p}")
+                            await _log_event(
+                                task_id=None,
+                                household_id=state.get("household_id"),
+                                actor="agent:perceive",
+                                action="file_access_blocked",
+                                reason=f"Local file access rejected outside eval_set: {file_url}",
+                            )
+                else:
+                    logger.warning(f"Unsupported or unauthorized file_url scheme: {file_url}")
+                    await _log_event(
+                        task_id=None,
+                        household_id=state.get("household_id"),
+                        actor="agent:perceive",
+                        action="file_access_blocked",
+                        reason=f"Unsupported or unauthorized file_url scheme: {file_url}",
+                    )
             except Exception as e:
                 logger.error(f"Error reading file {file_url}: {e}")
 
@@ -730,11 +760,12 @@ async def node_perceive(state: AgentState) -> dict:
         doc_type = "appointment"
 
     # Persist raw_text to artifact in DB
-    async with AsyncSessionLocal() as db:
-        artifact = await db.get(Artifact, state["artifact_id"])
-        if artifact and raw_text:
-            artifact.raw_text = raw_text
-            await db.commit()
+    if state.get("artifact_id"):
+        async with AsyncSessionLocal() as db:
+            artifact = await db.get(Artifact, state["artifact_id"])
+            if artifact and raw_text:
+                artifact.raw_text = raw_text
+                await db.commit()
 
     await _log_event(
         task_id=None,
@@ -743,7 +774,7 @@ async def node_perceive(state: AgentState) -> dict:
         action="perceived",
         reason=f"Perceived {len(raw_text)} chars ({doc_type})",
         payload={
-            "artifact_id": state["artifact_id"],
+            "artifact_id": state.get("artifact_id"),
             "doc_type": doc_type,
             "text_len": len(raw_text),
         },

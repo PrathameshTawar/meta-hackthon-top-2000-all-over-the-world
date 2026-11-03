@@ -1,6 +1,7 @@
 import hmac
+import os
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Request, Depends, Header
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, Any
 from datetime import datetime, timedelta
 
@@ -47,6 +48,21 @@ class SimulateIngestRequest(BaseModel):
     raw_text: str
     file_url: Optional[str] = None
     chat_id: Optional[str] = "demo_chat"
+
+    @field_validator("file_url")
+    @classmethod
+    def validate_file_url(cls, v: Optional[str]) -> Optional[str]:
+        if not v:
+            return v
+        allowed_schemes = ("telegram://", "whatsapp://", "whatsapp-pdf://", "simulate://")
+        if any(v.startswith(s) for s in allowed_schemes):
+            return v
+        if settings.environment != "production":
+            real_p = os.path.realpath(v)
+            eval_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", "..", "tests", "eval_set"))
+            if os.path.commonpath([real_p, eval_dir]) == eval_dir:
+                return v
+        raise ValueError(f"Invalid file_url '{v}'. Only telegram://, whatsapp://, whatsapp-pdf://, simulate://, or eval_set paths allowed.")
 
 
 class DoseNowRequest(BaseModel):
