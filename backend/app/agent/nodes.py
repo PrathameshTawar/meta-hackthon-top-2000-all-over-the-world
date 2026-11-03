@@ -921,7 +921,6 @@ async def node_scam_guardrail(state: AgentState) -> dict:
     raw_text = state.get("raw_text", "")
     household_id = state.get("household_id")
 
-    sibling_name = "Rohan"
     children = []
     lang = "mr"
     if household_id:
@@ -937,24 +936,22 @@ async def node_scam_guardrail(state: AgentState) -> dict:
                 )
             )
             children = c_res.scalars().all()
-            if children:
-                rohan_c = next((c for c in children if "rohan" in c.name.lower()), None)
-                raw_name = rohan_c.name if rohan_c else children[0].name
-                sibling_name = re.sub(r"\s*\(.*?\)", "", raw_name).strip() or "Rohan"
 
-    if lang == "hi":
-        parent_reply = f"⚠️ कोई भी OTP या जानकारी साझा न करें; मैंने {sibling_name} को जांच करने के लिए कहा है। (Don't share any OTP; I've asked {sibling_name} to check.)"
-    elif lang == "mr":
-        parent_reply = f"⚠️ काळजी घ्या: कोणताही OTP कोणाशीही शेअर करू नका; मी {sibling_name}ला तपासायला सांगितले आहे. (Don't share any OTP; I've asked {sibling_name} to check.)"
-    else:
-        parent_reply = f"⚠️ Don't share any OTP; I've asked {sibling_name} to check."
+    # Pick recipient: category owner for bank/government if set, else all children
+    category_owners = []
+    for c in children:
+        cats = c.categories_owned or []
+        if any(cat in cats for cat in ("bank", "government", "govt_letter")):
+            category_owners.append(c)
+    target_children = category_owners if category_owners else children
 
     snippet = raw_text[:120].strip()
     alert_text = (
         f"🚨 Scam/Fraud Warning: A suspicious message mentioning OTP/KYC/account block was received: "
         f"\"{snippet}\". We advised parent not to share any OTP. Please check in with them immediately."
     )
-    for child in children:
+    successful_notified_children = []
+    for child in target_children:
         try:
             await notify(
                 member=child,
@@ -963,8 +960,28 @@ async def node_scam_guardrail(state: AgentState) -> dict:
                 template_language="en_US",
                 template_params=[child.name, snippet[:50]],
             )
+            successful_notified_children.append(child)
         except Exception as ex:
             logger.warning(f"Failed to alert sibling of scam: {ex}")
+
+    # Build reply only after notification attempts
+    if successful_notified_children:
+        first_child = successful_notified_children[0]
+        raw_name = first_child.name
+        sibling_name = re.sub(r"\s*\(.*?\)", "", raw_name).strip() or "family"
+        if lang == "hi":
+            parent_reply = f"⚠️ कोई भी OTP या जानकारी साझा न करें; मैंने {sibling_name} को जांच करने के लिए कहा है। (Don't share any OTP; I've asked {sibling_name} to check.)"
+        elif lang == "mr":
+            parent_reply = f"⚠️ काळजी घ्या: कोणताही OTP कोणाशीही शेअर करू नका; मी {sibling_name}ला तपासायला सांगितले आहे. (Don't share any OTP; I've asked {sibling_name} to check.)"
+        else:
+            parent_reply = f"⚠️ Don't share any OTP; I've asked {sibling_name} to check."
+    else:
+        if lang == "hi":
+            parent_reply = "⚠️ कोई भी OTP या जानकारी साझा न करें। कृपया उत्तर देने से पहले अपने बेटे या बेटी को कॉल करें। (Don't share any OTP. Please call your son or daughter before replying.)"
+        elif lang == "mr":
+            parent_reply = "⚠️ काळजी घ्या: कोणताही OTP कोणाशीही शेअर करू नका. कृपया उत्तर देण्यापूर्वी आपल्या मुलाला किंवा मुलीला फोन करा. (Don't share any OTP. Please call your son or daughter before replying.)"
+        else:
+            parent_reply = "⚠️ Don't share any OTP. Please call your son or daughter before replying."
 
     await _log_event(
         task_id=None,
