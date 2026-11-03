@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b9853\", \"quote\": \"Refill Charges: \u20b9853\"},\n  \"due_date\": {\"value\": \"2026-11-02\", \"quote\": \"Estimated Delivery Date: 2026-11-02\"},\n  \"payee\": {\"value\": \"Bharat Gas\", \"quote\": \"Payee: Bharat Gas\"},\n  \"consumer_number\": {\"value\": null, \"quote\": null},\n  \"title\": {\"value\": \"Pay Bharat Gas refill charges\"}\n}",
+  "time": "2026-11-03T16:58:17.048300"
+}

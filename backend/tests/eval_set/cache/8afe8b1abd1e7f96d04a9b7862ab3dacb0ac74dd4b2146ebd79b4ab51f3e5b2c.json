@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b9890\", \"quote\": \"Amount: \u20b9890\"},\n  \"due_date\": {\"value\": \"2026-11-14\", \"quote\": \"Due Date: 2026-11-14\"},\n  \"payee\": {\"value\": \"Mahanagar Gas Limited\", \"quote\": \"Payee: Mahanagar Gas Limited\"},\n  \"consumer_number\": {\"value\": null, \"quote\": null},\n  \"title\": {\"value\": \"Pay MGL Piped Natural Gas Bill\"}\n}",
+  "time": "2026-11-03T17:05:40.941261"
+}

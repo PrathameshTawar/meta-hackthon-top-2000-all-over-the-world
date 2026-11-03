@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b912,650\", \"quote\": \"Installment Premium: \u20b912,650\"},\n  \"due_date\": {\"value\": \"2026-11-28\", \"quote\": \"Due Date: 2026-11-28\"},\n  \"payee\": {\"value\": \"LIC of India\", \"quote\": \"Payee: LIC of India\"},\n  \"consumer_number\": {\"value\": \"882941092\", \"quote\": \"Policy Number: 882941092\"},\n  \"title\": {\"value\": \"Pay LIC Jeevan Anand premium\"}\n}",
+  "time": "2026-11-03T16:57:00.736246"
+}

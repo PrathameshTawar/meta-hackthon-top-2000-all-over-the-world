@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b99,400\", \"quote\": \"Monthly Installment: INR 9,400\"},\n  \"due_date\": {\"value\": \"2026-11-05\", \"quote\": \"Payment Due: 2026-11-05\"},\n  \"payee\": {\"value\": \"ICICI Bank\", \"quote\": \"Payee: ICICI Bank\"},\n  \"consumer_number\": {\"value\": \"LA-PUN-091823\", \"quote\": \"Loan Account: LA-PUN-091823\"},\n  \"title\": {\"value\": \"Pay ICICI Bank Auto Loan EMI\"}\n}",
+  "time": "2026-11-03T16:57:34.724903"
+}

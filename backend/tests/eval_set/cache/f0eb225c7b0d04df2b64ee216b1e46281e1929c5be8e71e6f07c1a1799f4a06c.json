@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b9890\", \"quote\": \"\u20b9\u096e\u096f\u0966\"},\n  \"due_date\": {\"value\": \"2026-11-14\", \"quote\": \"\u0967\u096a \u0928\u094b\u0935\u094d\u0939\u0947\u0902\u092c\u0930\"},\n  \"payee\": {\"value\": \"Mahanagar Gas\", \"quote\": \"\u092e\u0939\u093e\u0928\u0917\u0930 \u0917\u0945\u0938\u091a\u0947\"},\n  \"consumer_number\": {\"value\": null, \"quote\": null},\n  \"title\": {\"value\": \"Pay Mahanagar Gas bill of \u20b9890 before 14 November\"}\n}",
+  "time": "2026-11-03T17:01:42.053942"
+}

@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b94,500\", \"quote\": \"\u20b9\u096a,\u096b\u0966\u0966\"},\n  \"due_date\": {\"value\": \"2026-11-15\", \"quote\": \"\u0967\u096b \u0928\u094b\u0935\u094d\u0939\u0947\u0902\u092c\u0930\"},\n  \"payee\": {\"value\": null, \"quote\": null},\n  \"consumer_number\": {\"value\": null, \"quote\": null},\n  \"title\": {\"value\": \"Pay society maintenance bill\"}\n}",
+  "time": "2026-11-03T17:02:10.193915"
+}

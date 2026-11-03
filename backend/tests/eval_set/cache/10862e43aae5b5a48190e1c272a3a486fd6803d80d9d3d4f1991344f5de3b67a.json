@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b93,850\", \"quote\": \"Premium Amount: \u20b93,850\"},\n  \"due_date\": {\"value\": \"2026-11-22\", \"quote\": \"Renewal Date: 2026-11-22\"},\n  \"payee\": {\"value\": \"New India Assurance\", \"quote\": \"Payee: New India Assurance\"},\n  \"consumer_number\": {\"value\": \"MH12-AB-4091\", \"quote\": \"Vehicle MH12-AB-4091\"},\n  \"title\": {\"value\": \"New India Assurance Motor Insurance Renewal\"}\n}",
+  "time": "2026-11-03T16:58:48.852697"
+}

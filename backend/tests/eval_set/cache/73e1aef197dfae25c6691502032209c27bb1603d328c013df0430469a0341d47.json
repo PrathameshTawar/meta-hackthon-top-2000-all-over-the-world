@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b919,800\", \"quote\": \"Total Amount Payable: \u20b919,800\"},\n  \"due_date\": {\"value\": \"2026-11-29\", \"quote\": \"Due Date: 2026-11-29\"},\n  \"payee\": {\"value\": \"ICICI Lombard\", \"quote\": \"Payee: ICICI Lombard\"},\n  \"consumer_number\": {\"value\": \"4015/I/00192837/00\", \"quote\": \"Policy Reference: 4015/I/00192837/00\"},\n  \"title\": {\"value\": \"Pay ICICI Lombard \u20b919,800 by 2026-11-29\"}\n}",
+  "time": "2026-11-03T17:08:33.509061"
+}

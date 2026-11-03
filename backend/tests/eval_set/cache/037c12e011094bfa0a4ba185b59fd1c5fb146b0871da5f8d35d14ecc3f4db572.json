@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b924,800\", \"quote\": \"\u20b9\u0968\u096a,\u096e\u0966\u0966\"},\n  \"due_date\": {\"value\": \"2026-11-25\", \"quote\": \"\u0968\u096b \u0928\u094b\u0935\u094d\u0939\u0947\u0902\u092c\u0930\u0932\u093e\"},\n  \"payee\": {\"value\": \"Star Health\", \"quote\": \"\u0938\u094d\u091f\u093e\u0930 \u0939\u0947\u0932\u094d\u0925\u091a\u0947\"},\n  \"consumer_number\": {\"value\": null, \"quote\": null},\n  \"title\": {\"value\": \"Pay Star Health renewal\"}\n}",
+  "time": "2026-11-03T17:04:49.703415"
+}

@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b93,120\", \"quote\": \"Payable Before Disconnection: \u20b93,120\"},\n  \"due_date\": {\"value\": \"2026-11-09\", \"quote\": \"Due Date: 2026-11-09\"},\n  \"payee\": {\"value\": \"BSES\", \"quote\": \"Payee: BSES\"},\n  \"consumer_number\": {\"value\": \"100982341\", \"quote\": \"Account: 100982341\"},\n  \"title\": {\"value\": \"Pay BSES electricity bill\"}\n}",
+  "time": "2026-11-03T16:59:05.305231"
+}

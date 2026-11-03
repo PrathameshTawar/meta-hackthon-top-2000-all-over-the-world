@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\":          {\"value\": \"\u20b924,800\", \"quote\": \"Premium: \u20b924,800\"},\n  \"due_date\":        {\"value\": \"2026-11-25\", \"quote\": \"Due: 2026-11-25\"},\n  \"payee\":           {\"value\": \"Star Health and Allied Insurance\", \"quote\": \"Payee: Star Health and Allied Insurance\"},\n  \"consumer_number\": {\"value\": null, \"quote\": null},\n  \"title\":           {\"value\": \"Star Health Senior Citizen Red Carpet Policy Renewal\"}\n}",
+  "time": "2026-11-03T17:04:25.385270"
+}

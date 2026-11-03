@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b96,450\", \"quote\": \"\u20b9\u096c,\u096a\u096b\u0966\"},\n  \"due_date\": {\"value\": \"2026-11-30\", \"quote\": \"\u0969\u0966 \u0928\u094b\u0935\u094d\u0939\u0947\u0902\u092c\u0930\"},\n  \"payee\": {\"value\": \"\u092e\u0939\u093e\u092a\u093e\u0932\u093f\u0915\u093e\", \"quote\": \"\u092e\u0939\u093e\u092a\u093e\u0932\u093f\u0915\u0947\u091a\u093e\"},\n  \"consumer_number\": {\"value\": null, \"quote\": null},\n  \"title\": {\"value\": \"Pay municipal house tax \u20b96,450 by 30 Nov\"}\n}",
+  "time": "2026-11-03T17:02:37.157167"
+}

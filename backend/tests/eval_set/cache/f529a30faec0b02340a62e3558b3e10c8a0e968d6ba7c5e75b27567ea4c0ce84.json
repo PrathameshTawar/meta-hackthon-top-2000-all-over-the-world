@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b922,500\", \"quote\": \"\u20b922,500\"},\n  \"due_date\": {\"value\": \"2026-11-10\", \"quote\": \"2026-11-10\"},\n  \"payee\": {\"value\": \"Bank of Baroda\", \"quote\": \"Payee: Bank of Baroda\"},\n  \"consumer_number\": {\"value\": \"04820100039281\", \"quote\": \"Loan Account: 04820100039281\"},\n  \"title\": {\"value\": \"Pay Bank of Baroda Home Loan EMI\"}\n}",
+  "time": "2026-11-03T17:08:03.484843"
+}

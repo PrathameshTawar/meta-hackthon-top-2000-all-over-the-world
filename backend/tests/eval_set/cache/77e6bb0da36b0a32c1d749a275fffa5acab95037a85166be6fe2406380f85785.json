@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b92,000\", \"quote\": \"Total Payable: \u20b92,000\"},\n  \"due_date\": {\"value\": \"2026-11-19\", \"quote\": \"Payment Due Date: 2026-11-19\"},\n  \"payee\": {\"value\": \"BEST Undertaking\", \"quote\": \"Payee: BEST Undertaking\"},\n  \"consumer_number\": {\"value\": \"01928374\", \"quote\": \"Consumer 01928374\"},\n  \"title\": {\"value\": \"Pay BEST Undertaking electricity bill\"}\n}",
+  "time": "2026-11-03T17:09:21.220430"
+}

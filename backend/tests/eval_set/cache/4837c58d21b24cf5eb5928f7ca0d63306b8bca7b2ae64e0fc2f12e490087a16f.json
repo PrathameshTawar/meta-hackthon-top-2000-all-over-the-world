@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b916,400\", \"quote\": \"Gross Premium: \u20b916,400\"},\n  \"due_date\": {\"value\": \"2026-11-22\", \"quote\": \"Premium Due Date: 2026-11-22\"},\n  \"payee\": {\"value\": \"Max Life\", \"quote\": \"Payee: Max Life\"},\n  \"consumer_number\": {\"value\": \"849201938\", \"quote\": \"Policy Number: 849201938\"},\n  \"title\": {\"value\": \"Pay Max Life insurance renewal premium\"}\n}",
+  "time": "2026-11-03T17:08:15.684333"
+}

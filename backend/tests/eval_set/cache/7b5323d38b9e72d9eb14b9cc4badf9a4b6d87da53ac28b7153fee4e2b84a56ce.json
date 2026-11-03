@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b92,600\", \"quote\": \"2,600 \u0930\u0941\u092a\u092f\u0947\"},\n  \"due_date\": {\"value\": \"2026-11-12\", \"quote\": \"12 \u0928\u094b\u0935\u094d\u0939\u0947\u0902\u092c\u0930\"},\n  \"payee\": {\"value\": \"\u0917\u094b\u0915\u0941\u0933\u0927\u093e\u092e \u0938\u094b\u0938\u093e\u092f\u091f\u0940\", \"quote\": \"\u0917\u094b\u0915\u0941\u0933\u0927\u093e\u092e \u0938\u094b\u0938\u093e\u092f\u091f\u0940\u091a\u0947\"},\n  \"consumer_number\": {\"value\": null, \"quote\": null},\n  \"title\": {\"value\": \"Pay Gokuldham Society maintenance bill\"}\n}",
+  "time": "2026-11-03T17:12:02.750659"
+}

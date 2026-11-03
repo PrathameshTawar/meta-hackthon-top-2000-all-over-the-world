@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b92,340\", \"quote\": \"Total Payable Amount: \u20b92,340\"},\n  \"due_date\": {\"value\": \"2026-11-18\", \"quote\": \"Bill Due Date: 2026-11-18\"},\n  \"payee\": {\"value\": \"Tata Power\", \"quote\": \"Payee: Tata Power\"},\n  \"consumer_number\": {\"value\": \"600129384\", \"quote\": \"CA Number: 600129384\"},\n  \"title\": {\"value\": \"Pay Tata Power electricity bill\"}\n}",
+  "time": "2026-11-03T16:56:28.835644"
+}

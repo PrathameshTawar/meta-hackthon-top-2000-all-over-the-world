@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b92,340\", \"quote\": \"\u20b92,340\"},\n  \"due_date\": {\"value\": \"2026-11-18\", \"quote\": \"2026-11-18\"},\n  \"payee\": {\"value\": \"Tata Power\", \"quote\": \"Tata Power\"},\n  \"consumer_number\": {\"value\": null, \"quote\": null},\n  \"title\": {\"value\": \"Pay Tata Power Bill\"}\n}",
+  "time": "2026-11-03T17:06:10.792315"
+}

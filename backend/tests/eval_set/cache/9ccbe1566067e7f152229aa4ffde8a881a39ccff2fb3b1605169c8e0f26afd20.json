@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b9890\", \"quote\": \"Net Amount Payable: \u20b9890\"},\n  \"due_date\": {\"value\": \"2026-11-14\", \"quote\": \"Pay Before: 2026-11-14\"},\n  \"payee\": {\"value\": \"Mahanagar Gas Limited\", \"quote\": \"Payee: Mahanagar Gas Limited\"},\n  \"consumer_number\": {\"value\": \"98124019\", \"quote\": \"Customer No: 98124019\"},\n  \"title\": {\"value\": \"Pay Mahanagar Gas Limited bill of \u20b9890\"}\n}",
+  "time": "2026-11-03T16:56:13.810428"
+}

@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b918,500\", \"quote\": \"INR 18,500\"},\n  \"due_date\": {\"value\": \"2026-11-10\", \"quote\": \"2026-11-10\"},\n  \"payee\": {\"value\": \"HDFC Bank\", \"quote\": \"Payee: HDFC Bank\"},\n  \"consumer_number\": {\"value\": \"40982-ED\", \"quote\": \"Loan Account: 40982-ED\"},\n  \"title\": {\"value\": \"Pay HDFC Bank education loan EMI\"}\n}",
+  "time": "2026-11-03T16:55:34.601240"
+}

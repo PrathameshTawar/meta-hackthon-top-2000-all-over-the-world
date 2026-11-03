@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b91,840\", \"quote\": \"Bill Amount: \u20b91,840\"},\n  \"due_date\": {\"value\": \"2026-11-03\", \"quote\": \"Due Date: 2026-11-03\"},\n  \"payee\": {\"value\": \"Mahavitaran (MSEDCL)\", \"quote\": \"Payee: Mahavitaran (MSEDCL)\"},\n  \"consumer_number\": {\"value\": \"019283746501\", \"quote\": \"Consumer No: 019283746501\"},\n  \"title\": {\"value\": \"Pay Mahavitaran electricity bill\"}\n}",
+  "time": "2026-11-03T16:55:12.715046"
+}

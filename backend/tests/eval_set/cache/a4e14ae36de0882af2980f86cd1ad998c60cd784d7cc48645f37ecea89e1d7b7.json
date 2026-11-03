@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b92,340\", \"quote\": \"\u20b9\u0968,\u0969\u096a\u0966\"},\n  \"due_date\": {\"value\": \"2026-11-18\", \"quote\": \"\u0967\u096e \u0928\u094b\u0935\u094d\u0939\u0947\u0902\u092c\u0930\u0932\u093e\"},\n  \"payee\": {\"value\": \"\u091f\u093e\u091f\u093e \u092a\u0949\u0935\u0930\", \"quote\": \"\u091f\u093e\u091f\u093e \u092a\u0949\u0935\u0930\u091a\u0947\"},\n  \"consumer_number\": {\"value\": null, \"quote\": null},\n  \"title\": {\"value\": \"Pay Tata Power bill of \u20b92,340 due 18 November\"}\n}",
+  "time": "2026-11-03T17:03:33.695086"
+}

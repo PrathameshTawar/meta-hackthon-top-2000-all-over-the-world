@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b91,179\", \"quote\": \"Total Charges: \u20b91,179\"},\n  \"due_date\": {\"value\": \"2026-11-12\", \"quote\": \"Payment Due Date: 2026-11-12\"},\n  \"payee\": {\"value\": \"Airtel\", \"quote\": \"Payee: Airtel\"},\n  \"consumer_number\": {\"value\": \"020-25410982\", \"quote\": \"Account No: 020-25410982\"},\n  \"title\": {\"value\": \"Pay Airtel Broadband bill\"}\n}",
+  "time": "2026-11-03T16:57:18.999268"
+}

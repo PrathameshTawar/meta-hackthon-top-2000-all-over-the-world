@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b9825\", \"quote\": \"Total Amount Payable: \u20b9825\"},\n  \"due_date\": {\"value\": \"2026-11-14\", \"quote\": \"Due Date: 2026-11-14\"},\n  \"payee\": {\"value\": \"Jio Fiber\", \"quote\": \"Payee: Jio Fiber\"},\n  \"consumer_number\": {\"value\": \"9182374650\", \"quote\": \"Account ID: 9182374650\"},\n  \"title\": {\"value\": \"Pay Jio Fiber bill of \u20b9825\"}\n}",
+  "time": "2026-11-03T17:07:05.251270"
+}

@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b91,850\", \"quote\": \"\u20b91,850\"},\n  \"due_date\": {\"value\": \"2026-11-27\", \"quote\": \"2026-11-27\"},\n  \"payee\": {\"value\": \"Thane Municipal\", \"quote\": \"Payee: Thane Municipal\"},\n  \"consumer_number\": {\"value\": \"W-9281-B\", \"quote\": \"Connection No: W-9281-B\"},\n  \"title\": {\"value\": \"Pay Thane Municipal water bill\"}\n}",
+  "time": "2026-11-03T17:08:49.750498"
+}

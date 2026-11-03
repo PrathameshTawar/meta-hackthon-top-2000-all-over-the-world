@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b912,650\", \"quote\": \"\u20b9\u0967\u0968,\u096c\u096b\u0966\"},\n  \"due_date\": {\"value\": \"2026-11-28\", \"quote\": \"\u0968\u096e \u0928\u094b\u0935\u094d\u0939\u0947\u0902\u092c\u0930\"},\n  \"payee\": {\"value\": \"LIC\", \"quote\": \"\u090f\u0932\u0906\u092f\u0938\u0940\"},\n  \"consumer_number\": {\"value\": null, \"quote\": null},\n  \"title\": {\"value\": \"Pay LIC policy premium\"}\n}",
+  "time": "2026-11-03T17:03:09.794484"
+}

@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b91,480\", \"quote\": \"Net Amount Payable: \u20b91,480\"},\n  \"due_date\": {\"value\": \"2026-11-24\", \"quote\": \"Due Date: 2026-11-24\"},\n  \"payee\": {\"value\": \"Indraprastha Gas\", \"quote\": \"Payee: Indraprastha Gas\"},\n  \"consumer_number\": {\"value\": \"4001928374\", \"quote\": \"BP No: 4001928374\"},\n  \"title\": {\"value\": \"Pay Indraprastha Gas bill of \u20b91,480\"}\n}",
+  "time": "2026-11-03T17:07:36.192715"
+}

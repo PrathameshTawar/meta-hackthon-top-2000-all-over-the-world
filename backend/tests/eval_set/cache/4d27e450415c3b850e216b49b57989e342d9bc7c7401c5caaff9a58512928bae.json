@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": null, \"quote\": null},\n  \"due_date\": {\"value\": null, \"quote\": null},\n  \"payee\": {\"value\": \"Sahyadri Hospital\", \"quote\": \"Payee: Sahyadri Hospital\"},\n  \"consumer_number\": {\"value\": null, \"quote\": null},\n  \"title\": {\"value\": \"Cardiology Consultation Booking at Sahyadri Hospital\"}\n}",
+  "time": "2026-11-03T16:57:50.836300"
+}

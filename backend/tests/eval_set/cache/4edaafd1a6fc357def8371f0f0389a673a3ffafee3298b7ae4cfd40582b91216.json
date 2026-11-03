@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b9750\", \"quote\": \"Amount Payable: INR 750\"},\n  \"due_date\": {\"value\": \"2026-11-20\", \"quote\": \"Pay Before: 2026-11-20\"},\n  \"payee\": {\"value\": \"BSNL Landline\", \"quote\": \"Payee: BSNL Landline\"},\n  \"consumer_number\": {\"value\": \"020-25674892\", \"quote\": \"Telephone No: 020-25674892\"},\n  \"title\": {\"value\": \"Pay BSNL Landline bill\"}\n}",
+  "time": "2026-11-03T17:07:22.885743"
+}

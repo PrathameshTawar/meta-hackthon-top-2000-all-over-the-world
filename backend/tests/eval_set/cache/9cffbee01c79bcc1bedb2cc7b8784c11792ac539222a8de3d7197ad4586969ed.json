@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b94,500\", \"quote\": \"Maintenance & Sinking Fund: \u20b94,500\"},\n  \"due_date\": {\"value\": \"2026-11-15\", \"quote\": \"Due Date: 2026-11-15\"},\n  \"payee\": {\"value\": \"Suyash Co-op Housing Society\", \"quote\": \"Payee: Suyash Co-op Housing Society\"},\n  \"consumer_number\": {\"value\": null, \"quote\": null},\n  \"title\": {\"value\": \"Pay Suyash Co-op Housing Society maintenance bill\"}\n}",
+  "time": "2026-11-03T16:58:30.399753"
+}

@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b914,200\", \"quote\": \"14,200 \u0930\u0941\u092a\u092f\u0947\"},\n  \"due_date\": {\"value\": null, \"quote\": null},\n  \"payee\": {\"value\": \"\u090f\u0915\u094d\u0938\u093f\u0938 \u092c\u0948\u0902\u0915\", \"quote\": \"\u090f\u0915\u094d\u0938\u093f\u0938 \u092c\u0948\u0902\u0915\"},\n  \"consumer_number\": {\"value\": null, \"quote\": null},\n  \"title\": {\"value\": \"Pay Axis Bank loan EMI of \u20b914,200\"}\n}",
+  "time": "2026-11-03T17:10:46.091983"
+}

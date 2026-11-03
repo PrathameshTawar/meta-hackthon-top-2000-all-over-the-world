@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b91,840\", \"quote\": \"\u20b9\u0967,\u096e\u096a\u0966\"},\n  \"due_date\": {\"value\": \"2026-11-03\", \"quote\": \"\u0969 \u0928\u094b\u0935\u094d\u0939\u0947\u0902\u092c\u0930 \u092a\u0930\u094d\u092f\u0902\u0924\"},\n  \"payee\": {\"value\": \"\u092e\u0939\u093e\u0935\u093f\u0924\u0930\u0923\", \"quote\": \"\u092e\u0939\u093e\u0935\u093f\u0924\u0930\u0923\u091a\u0947\"},\n  \"consumer_number\": {\"value\": null, \"quote\": null},\n  \"title\": {\"value\": \"Pay Mahavitaran electricity bill\"}\n}",
+  "time": "2026-11-03T16:59:23.909461"
+}

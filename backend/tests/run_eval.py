@@ -183,7 +183,8 @@ async def evaluate_single_set(dataset_name: str, items_path: Path, args):
             payee = (h_ext.get("payee") or {}).get("value") or ""
             amount = (h_ext.get("amount") or {}).get("value") or ""
             due_date = (h_ext.get("due_date") or {}).get("value") or ""
-            key = hashlib.sha256(f"fb|{normalize_payee(payee)}|{int(re.sub(r'[^\\d]', '', amount) or 0)}|{due_date[:7]}".encode()).hexdigest()[:16]
+            amount_digits = int(re.sub(r"[^\d]", "", amount) or 0)
+            key = hashlib.sha256(f"fb|{normalize_payee(payee)}|{amount_digits}|{due_date[:7]}".encode()).hexdigest()[:16]
             if pair_id not in dupe_keys_baseline:
                 dupe_keys_baseline[pair_id] = key
             else:
@@ -500,6 +501,25 @@ async def main():
 
     await init_db()
     await seed_data()
+
+    import app.agent.nodes as nodes_module
+    _orig_call_llm = nodes_module._call_llm
+
+    async def _cached_call_llm(prompt: str) -> Optional[str]:
+        key = prompt.encode("utf-8")
+        cached = get_cached_response(key, refresh=args.refresh_cache)
+        if cached is not None:
+            return cached
+        resp = await _orig_call_llm(prompt)
+        if resp is not None:
+            set_cached_response(key, resp)
+        return resp
+
+    nodes_module._call_llm = _cached_call_llm
+
+    # If cache files exist but no API key is provided, enable model path to read cache
+    if not settings.get_api_key() and any(CACHE_DIR.glob("*.json")):
+        settings.get_api_key = lambda: "cached_model_key"
 
     results = []
     if args.set in ("regression", "all"):

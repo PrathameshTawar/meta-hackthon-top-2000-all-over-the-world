@@ -1,0 +1,4 @@
+{
+  "response": "{\n  \"amount\": {\"value\": \"\u20b92,600\", \"quote\": \"Maintenance & Sinking Fund: \u20b92,600\"},\n  \"due_date\": {\"value\": \"2026-11-12\", \"quote\": \"Due Date: 2026-11-12\"},\n  \"payee\": {\"value\": \"Gokuldham\", \"quote\": \"Payee: Gokuldham\"},\n  \"consumer_number\": {\"value\": \"B-402\", \"quote\": \"Flat No: B-402\"},\n  \"title\": {\"value\": \"Pay Gokuldham Society Maintenance B-402\"}\n}",
+  "time": "2026-11-03T17:09:07.870707"
+}
