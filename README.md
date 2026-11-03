@@ -3,9 +3,9 @@
 > *"Saath: your parents' bills and care, handled together."*  
 > **Meta Global AI Developer Hackathon 2026** · Oct 27 – Nov 4, 2026  
 > **Track:** Build for Your World  
-> **Demo Video:** [Watch 3-minute Video Walkthrough](https://youtu.be/demo)  
-> **Live Web App:** [https://saath-demo.vercel.app](https://saath-demo.vercel.app) *(English board by default with instant 1-click Marathi/Hindi toggle)*  
-> **Telegram Bot:** [@SaathFamilyBot](https://t.me/SaathFamilyBot) · **WhatsApp Cloud API:** Meta Cloud API v22.0  
+> **Demo Video:** [Watch 3-minute Video Walkthrough](https://youtu.be/demo) *(Recording in progress — link coming before submission deadline)*  
+> **Live Web App:** [https://saath-demo.vercel.app](https://saath-demo.vercel.app) *(Deployment in progress — local preview available at http://localhost:3000)*  
+> **Telegram Bot:** [@SaathFamilyBot](https://t.me/SaathFamilyBot) *(Bot registered on Telegram; long-polling active locally)* · **WhatsApp Cloud API:** Meta Cloud API v22.0  
 > **Repository:** [https://github.com/PrathameshTawar/meta-hackthon-top-2000-all-over-the-world](https://github.com/PrathameshTawar/meta-hackthon-top-2000-all-over-the-world)  
 
 **Saath** ("साथ", *together*) turns an ageing parent's voice notes and document photos into a verified, shared task board for adult children managing family obligations from other cities.
@@ -27,12 +27,13 @@ Saath is evaluated against three distinct offline test suites: our headline **He
 ### 1. Headline: Held-Out Generalization Set (26 Items — Zero Memorization)
 > *Note on Holdout Integrity:* The 26-item holdout set tests unseen utility providers (BEST, Adani Electricity, Jio, BSNL, New India Assurance), Devanagari numerals (`₹१,८४०`), rotated/noisy OCR transcripts, separate disconnection vs due dates, and boundary cases. None of these payees appear anywhere in the codebase keyword dictionary. The keyword baseline scores 62.5% on unseen items, leaving clear room for Meta Muse Spark to demonstrate multimodal generalization.
 
-| Test Slice | Items | Metric Evaluated | Target | Keyword Baseline (No AI) | Saath Guardrail | Status |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Unseen Utilities & Invoices** | 17 | Field accuracy (unseen payees, noisy OCR, Devanagari numerals) | Generalization | **62.5%** | — | ✅ Acceptable (Zero Memorization) |
-| **Diagnostic Lab Reports** | 4 | Guardrail refusal recall (blood/lipid tests) | 100% | 0 of 4 (0% Refusal) | **4 of 4 (100% Refusal)** | ✅ Passed (Zero Leakage) |
-| **Medical Hospital Bills & Invoices** | 5 | Guardrail false-refusal rate (must track as bill) | 0.0% | 0.0% (5 of 5 tracked) | **0.0% (5 of 5 tracked)** | ✅ Passed (Zero False Refusal) |
-| **Pipeline Latency** | 26 | Median: 5.6 ms · p95: 9.1 ms (isolated test DB) | < 5000 ms | **5.6 ms** | — | ✅ Passed |
+| Test Slice | Items | Metric Evaluated | Target | Keyword Baseline (No AI) | Meta Muse Spark (Multimodal) | Saath Guardrail | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Unseen Utilities & Invoices** | 17 | Field accuracy (unseen payees, noisy OCR, Devanagari numerals) | Generalization | **62.5%** | *Pending (eval key)* | — | ✅ Acceptable (Zero Memorization) |
+| **Diagnostic Lab Reports** | 4 | Guardrail refusal recall (blood/lipid tests) | 100% | 0 of 4 (0% Refusal) | *Pending (eval key)* | **4 of 4 (100% Refusal)** | ✅ Passed (Zero Leakage) |
+| **Medical Hospital Bills & Invoices** | 5 | Guardrail false-refusal rate (must track as bill) | 0.0% | 0.0% (5 of 5 tracked) | *Pending (eval key)* | **0.0% (5 of 5 tracked)** | ✅ Passed (Zero False Refusal) |
+| **Keyword baseline latency (no model calls)** | 26 | Median: 5.6 ms · p95: 9.1 ms (isolated test DB) | < 5000 ms | **5.6 ms** | — | — | ✅ Passed |
+| **End-to-End Multimodal Latency** | 26 | Full vision/audio inference roundtrip | < 5000 ms | — | *Pending live eval* | — | ⏳ Pending live run |
 
 ### 2. Regression Suite (40 Items / 35 Test Cases)
 > *Note on Suite Design:* Immutable regression suite ensuring that existing Mahavitaran, Tata Power, and hospital bill extraction accuracy, cross-lingual deduplication, and medical boundary enforcement remain unbroken.
