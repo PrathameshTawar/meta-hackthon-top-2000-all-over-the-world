@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getHealthSummary,
@@ -8,6 +8,7 @@ import {
   updateMedication,
   createThreshold,
   updateThreshold,
+  postDeviceVital,
   type Member,
   type Medication,
   type VitalThreshold,
@@ -26,8 +27,10 @@ import {
   ChevronUp,
   Shield,
   Trash2,
+  Watch,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { isWebBluetoothAvailable, connectHeartRate } from "@/lib/heartRate";
 
 interface HealthPanelProps {
   householdId: number;
@@ -52,6 +55,90 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
   const [expandedEvidence, setExpandedEvidence] = useState<Record<number, boolean>>({});
   const [isAddMedOpen, setIsAddMedOpen] = useState(false);
   const [isAddThreshOpen, setIsAddThreshOpen] = useState(false);
+
+  // Watch state (Web Bluetooth H-8)
+  const [isBluetoothSupported, setIsBluetoothSupported] = useState(false);
+  const [isConnectingWatch, setIsConnectingWatch] = useState(false);
+  const [watchDeviceName, setWatchDeviceName] = useState<string | null>(null);
+  const [watchDisconnectFn, setWatchDisconnectFn] = useState<(() => void) | null>(null);
+  const [liveBpm, setLiveBpm] = useState<number | null>(null);
+  const [announcedBpm, setAnnouncedBpm] = useState<number | null>(null);
+  const [watchParentId, setWatchParentId] = useState<number>(parents[0]?.id || 0);
+  const [watchStatusMessage, setWatchStatusMessage] = useState<string | null>(null);
+  const lastSentRef = useRef<number>(0);
+  const lastAnnouncedRef = useRef<number>(0);
+
+  useEffect(() => {
+    setIsBluetoothSupported(isWebBluetoothAvailable());
+  }, []);
+
+  useEffect(() => {
+    if (!watchParentId && parents[0]?.id) {
+      setWatchParentId(parents[0].id);
+    }
+  }, [parents, watchParentId]);
+
+  const handleConnectWatch = async () => {
+    setIsConnectingWatch(true);
+    setWatchStatusMessage(null);
+    try {
+      const conn = await connectHeartRate(
+        (bpm) => {
+          setLiveBpm(bpm);
+          const now = Date.now();
+          if (now - lastAnnouncedRef.current >= 30000) {
+            lastAnnouncedRef.current = now;
+            setAnnouncedBpm(bpm);
+          }
+          const targetPid = watchParentId || parents[0]?.id;
+          if (now - lastSentRef.current >= 5000 && targetPid) {
+            lastSentRef.current = now;
+            postDeviceVital(householdId, {
+              member_id: targetPid,
+              kind: "pulse",
+              value: bpm,
+              device_name: conn.deviceName,
+            })
+              .then((res) => {
+                if (res.stored) {
+                  queryClient.invalidateQueries({ queryKey: ["healthSummary", householdId] });
+                }
+              })
+              .catch(() => {});
+          }
+        },
+        () => {
+          setWatchDeviceName(null);
+          setWatchDisconnectFn(null);
+          setLiveBpm(null);
+          setWatchStatusMessage(t("watch_disconnected"));
+        }
+      );
+      setWatchDeviceName(conn.deviceName);
+      setWatchDisconnectFn(() => conn.disconnect);
+      setWatchStatusMessage(t("watch_connected"));
+    } catch (err: any) {
+      if (err?.name !== "NotFoundError") {
+        setWatchStatusMessage(err?.message || "Failed to connect watch");
+      }
+    } finally {
+      setIsConnectingWatch(false);
+    }
+  };
+
+  const handleDisconnectWatch = () => {
+    if (watchDisconnectFn) {
+      try {
+        watchDisconnectFn();
+      } catch (err) {
+        console.error("Disconnect error:", err);
+      }
+    }
+    setWatchDeviceName(null);
+    setWatchDisconnectFn(null);
+    setLiveBpm(null);
+    setWatchStatusMessage(t("watch_disconnected"));
+  };
 
   // New Medication form state
   const [newMedParentId, setNewMedParentId] = useState<number>(parents[0]?.id || 0);
@@ -220,6 +307,86 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
           </div>
         </div>
 
+        {/* Live Watch Connection (Web Bluetooth H-8) */}
+        <div className="border border-khata-subtle rounded-xl p-4 bg-white shadow-2xs space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-sindoor-50 text-sindoor-700 border border-sindoor-100 flex items-center justify-center shrink-0">
+                <Watch size={20} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-khata-ink">{t("live_heart_rate")}</h3>
+                  {watchDeviceName && (
+                    <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      {watchDeviceName}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-khata-muted">
+                  {watchDeviceName
+                    ? `${t("watch_connected")} (${parents.find((p) => p.id === watchParentId)?.name || ""})`
+                    : t("wearing_watch")}
+                </p>
+              </div>
+            </div>
+
+            {!isBluetoothSupported ? (
+              <p className="text-xs text-khata-muted italic max-w-xs">{t("watch_not_supported")}</p>
+            ) : watchDeviceName ? (
+              <div className="flex items-center gap-4">
+                <div className="flex items-baseline gap-1.5 bg-sindoor-50/60 border border-sindoor-200/80 px-4 py-1.5 rounded-xl">
+                  <span className="text-4xl font-extrabold text-sindoor-700 font-mono tabular-nums leading-none">
+                    {liveBpm ?? "--"}
+                  </span>
+                  <span className="text-xs font-bold text-khata-muted">BPM</span>
+                </div>
+                <div aria-live="polite" className="sr-only">
+                  {announcedBpm ? `Current heart rate: ${announcedBpm} beats per minute` : ""}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDisconnectWatch}
+                  className="px-3.5 py-2 text-xs font-bold text-khata-ink bg-khata-raised hover:bg-khata-subtle border border-khata-subtle rounded-lg transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sindoor-500 focus-visible:ring-offset-2"
+                >
+                  {t("disconnect_watch")}
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2.5">
+                {parents.length > 1 && (
+                  <select
+                    value={watchParentId}
+                    onChange={(e) => setWatchParentId(Number(e.target.value))}
+                    aria-label={t("wearing_watch")}
+                    className="text-xs border border-khata-subtle rounded-lg px-2.5 py-2 bg-white text-khata-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sindoor-500"
+                  >
+                    {parents.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <button
+                  type="button"
+                  onClick={handleConnectWatch}
+                  disabled={isConnectingWatch || parents.length === 0}
+                  className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-sindoor-600 hover:bg-sindoor-700 disabled:opacity-50 rounded-lg shadow-2xs transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sindoor-500 focus-visible:ring-offset-2"
+                >
+                  <Watch size={14} />
+                  <span>{isConnectingWatch ? "Connecting…" : t("connect_watch")}</span>
+                </button>
+              </div>
+            )}
+          </div>
+          {watchStatusMessage && (
+            <p className="text-[11px] text-khata-muted font-medium pt-1 border-t border-khata-subtle/50">
+              {watchStatusMessage}
+            </p>
+          )}
+        </div>
+
         {parents.length === 0 ? (
           <p className="text-xs text-khata-muted">No parents registered in household.</p>
         ) : (
@@ -285,13 +452,18 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
                               <span className="font-mono font-bold uppercase tracking-wider text-[10px] px-2 py-0.5 rounded-md bg-khata-raised text-khata-ink border border-khata-subtle">
                                 {v.kind}
                               </span>
+                              {v.source === "watch" && (
+                                <span className="font-medium text-[10px] px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-200">
+                                  {t("from_watch")}
+                                </span>
+                              )}
                               <span className="font-mono font-bold text-khata-ink text-sm tabular-nums">{readingVal}</span>
                               <span className="text-khata-muted">•</span>
                               <span className="text-khata-muted font-mono text-[11px]">{dateStr}</span>
                             </div>
                             <button
                               onClick={() => setExpandedEvidence((prev) => ({ ...prev, [v.id]: !isExpanded }))}
-                              className="flex items-center gap-1 text-[11px] text-brand-600 hover:text-brand-700 font-bold cursor-pointer"
+                              className="flex items-center gap-1 text-[11px] text-brand-600 hover:text-brand-700 font-bold cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sindoor-500 rounded"
                             >
                               <FileText size={12} />
                               {isExpanded ? "Hide source" : "Evidence"}
@@ -301,7 +473,10 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
 
                           {isExpanded && (
                             <div className="verbatim-box p-2.5 rounded-md bg-ochre-50/70 border border-ochre-200/80 text-ochre-900 text-xs font-mono">
-                              <span className="font-sans font-bold">Quoted Source span:</span> &ldquo;{v.quote}&rdquo;
+                              <span className="font-sans font-bold">
+                                {v.source === "watch" ? "Device:" : "Quoted Source span:"}
+                              </span>{" "}
+                              &ldquo;{v.quote}&rdquo;
                             </div>
                           )}
                         </div>

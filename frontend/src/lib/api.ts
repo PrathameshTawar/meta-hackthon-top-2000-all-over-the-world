@@ -135,6 +135,7 @@ export interface Vital {
   measured_at: string;
   artifact_id: number | null;
   quote: string;
+  source?: "voice" | "text" | "watch";
 }
 
 export interface VitalThreshold {
@@ -177,5 +178,15 @@ export const simulateDoseNow = (medicationId: number) =>
 
 export const simulateSkipHealth = (minutes: number = 120) =>
   api.post<{ status: string; escalated_doses_count: number }>("/admin/health/skip", { minutes }).then((r) => r.data);
+
+export interface DeviceVitalIn {
+  member_id: number;
+  kind: "pulse";
+  value: number;
+  device_name: string;
+}
+
+export const postDeviceVital = (householdId: number, data: DeviceVitalIn) =>
+  api.post<{ stored: boolean }>(`/health/${householdId}/vitals/device`, data).then((r) => r.data);
 
 

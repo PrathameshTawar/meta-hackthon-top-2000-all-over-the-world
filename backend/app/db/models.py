@@ -247,6 +247,7 @@ class Vital(Base):
     measured_at: Mapped[datetime] = mapped_column(DateTime)  # naive IST
     artifact_id: Mapped[Optional[int]] = mapped_column(ForeignKey("artifacts.id"), nullable=True)
     quote: Mapped[str] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(String(20), default="voice")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     household: Mapped["Household"] = relationship()

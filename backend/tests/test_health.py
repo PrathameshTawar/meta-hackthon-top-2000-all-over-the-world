@@ -516,3 +516,173 @@ async def test_h4_appointment_logistics_polish(monkeypatch):
     assert len(notifications) == 0
 
 
+@pytest.mark.asyncio
+async def test_h8_live_heart_rate_device_endpoint(monkeypatch):
+    """
+    H-8: Live heart rate from watch (Web Bluetooth).
+    Tests:
+    - reading stored
+    - second reading within 60 s not stored
+    - threshold crossing stored and alerts once
+    - second crossing within 30 min doesn't alert again
+    - implausible value -> 422
+    - member from another household -> 404
+    - child member -> 404
+    - no token -> 401
+    """
+    from app.db.models import VitalThreshold, VitalKind, VitalOp, Vital
+
+    def unique_phone():
+        return f"+919{uuid.uuid4().int % 1000000000:09d}"
+
+    async with AsyncSessionLocal() as db:
+        h1 = Household(name="H8 Family 1", primary_language="en")
+        h2 = Household(name="H8 Family 2", primary_language="en")
+        db.add_all([h1, h2])
+        await db.commit()
+        await db.refresh(h1)
+        await db.refresh(h2)
+
+        aai = Member(household_id=h1.id, name="Aai", role=MemberRole.parent, phone=unique_phone())
+        rohan = Member(household_id=h1.id, name="Rohan", role=MemberRole.child, phone=unique_phone())
+        other_parent = Member(household_id=h2.id, name="Other", role=MemberRole.parent, phone=unique_phone())
+        db.add_all([aai, rohan, other_parent])
+        await db.commit()
+        await db.refresh(aai)
+        await db.refresh(rohan)
+        await db.refresh(other_parent)
+
+        # Threshold: pulse > 100 alerts Rohan
+        th = VitalThreshold(
+            household_id=h1.id,
+            member_id=aai.id,
+            kind=VitalKind.pulse,
+            field="value_1",
+            op=VitalOp.gt,
+            limit=100.0,
+            note="Doctor advisory",
+            set_by_member_id=rohan.id,
+            active=True,
+        )
+        db.add(th)
+        await db.commit()
+
+        h1_id = h1.id
+        h2_id = h2.id
+        aai_id = aai.id
+        rohan_id = rohan.id
+        other_id = other_parent.id
+
+    alerts = []
+    async def mock_notify(**kwargs):
+        alerts.append(kwargs)
+        return True
+
+    monkeypatch.setattr("app.api.health.notify", mock_notify)
+
+    transport = ASGITransport(app=app)
+    headers = {"X-Admin-Token": settings.admin_secret}
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. No token -> 401
+        res_no_auth = await client.post(
+            f"/health/{h1_id}/vitals/device",
+            json={"member_id": aai_id, "kind": "pulse", "value": 72, "device_name": "Apple Watch"},
+        )
+        assert res_no_auth.status_code == 401
+
+        # 2. Member from another household -> 404
+        res_other_hh = await client.post(
+            f"/health/{h1_id}/vitals/device",
+            json={"member_id": other_id, "kind": "pulse", "value": 72, "device_name": "Apple Watch"},
+            headers=headers,
+        )
+        assert res_other_hh.status_code == 404
+
+        # 3. Child member -> 404
+        res_child = await client.post(
+            f"/health/{h1_id}/vitals/device",
+            json={"member_id": rohan_id, "kind": "pulse", "value": 72, "device_name": "Apple Watch"},
+            headers=headers,
+        )
+        assert res_child.status_code == 404
+
+        # 4. Implausible value (< 30 or > 220) -> 422
+        res_low = await client.post(
+            f"/health/{h1_id}/vitals/device",
+            json={"member_id": aai_id, "kind": "pulse", "value": 25, "device_name": "Apple Watch"},
+            headers=headers,
+        )
+        assert res_low.status_code == 422
+
+        res_high = await client.post(
+            f"/health/{h1_id}/vitals/device",
+            json={"member_id": aai_id, "kind": "pulse", "value": 240, "device_name": "Apple Watch"},
+            headers=headers,
+        )
+        assert res_high.status_code == 422
+
+        # 5. Normal reading stored -> 200, {"stored": True}
+        res_store = await client.post(
+            f"/health/{h1_id}/vitals/device",
+            json={"member_id": aai_id, "kind": "pulse", "value": 72, "device_name": "Apple Watch Series 5"},
+            headers=headers,
+        )
+        assert res_store.status_code == 200
+        assert res_store.json() == {"stored": True}
+        assert len(alerts) == 0
+
+        # Verify DB entry
+        async with AsyncSessionLocal() as db:
+            from sqlalchemy import select
+            v_res = await db.execute(select(Vital).where(Vital.member_id == aai_id))
+            vitals = v_res.scalars().all()
+            assert len(vitals) == 1
+            assert vitals[0].source == "watch"
+            assert vitals[0].value_1 == 72
+            assert vitals[0].unit == "bpm"
+            assert "Apple Watch Series 5" in vitals[0].quote
+
+        # 6. Second reading within 60 s not stored -> {"stored": False}
+        res_throttle = await client.post(
+            f"/health/{h1_id}/vitals/device",
+            json={"member_id": aai_id, "kind": "pulse", "value": 75, "device_name": "Apple Watch Series 5"},
+            headers=headers,
+        )
+        assert res_throttle.status_code == 200
+        assert res_throttle.json() == {"stored": False}
+        assert len(alerts) == 0
+
+        # 7. Threshold crossing (115 > 100) stored and alerts once
+        res_crossing = await client.post(
+            f"/health/{h1_id}/vitals/device",
+            json={"member_id": aai_id, "kind": "pulse", "value": 115, "device_name": "Apple Watch Series 5"},
+            headers=headers,
+        )
+        assert res_crossing.status_code == 200
+        assert res_crossing.json() == {"stored": True}
+        assert len(alerts) == 1
+        assert alerts[0]["member"].id == rohan_id
+        assert "beyond the limit your family set" in alerts[0]["text"]
+        assert "115 bpm" in alerts[0]["text"]
+
+        # 8. Second crossing within 30 min stored (after 60s) doesn't alert again
+        # Age the previous vital past 60s so it doesn't throttle storage
+        from datetime import timedelta
+        async with AsyncSessionLocal() as db:
+            last_v = (await db.execute(select(Vital).order_by(Vital.id.desc()))).scalars().first()
+            last_v.measured_at = last_v.measured_at - timedelta(seconds=70)
+            await db.commit()
+
+        res_second_cross = await client.post(
+            f"/health/{h1_id}/vitals/device",
+            json={"member_id": aai_id, "kind": "pulse", "value": 120, "device_name": "Apple Watch Series 5"},
+            headers=headers,
+        )
+        assert res_second_cross.status_code == 200
+        assert res_second_cross.json() == {"stored": True}
+        # Alert count must remain 1 (no second alert within 30m)
+        assert len(alerts) == 1
+
+
+

@@ -54,6 +54,11 @@ async def init_db():
         if cols and "quiet_hours_end" not in cols:
             sync_conn.execute(text("ALTER TABLE members ADD COLUMN quiet_hours_end INTEGER DEFAULT 7"))
 
+        res_v = sync_conn.execute(text("PRAGMA table_info(vitals)"))
+        cols_v = [row[1] for row in res_v.fetchall()]
+        if cols_v and "source" not in cols_v:
+            sync_conn.execute(text("ALTER TABLE vitals ADD COLUMN source VARCHAR(20) DEFAULT 'voice'"))
+
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)

@@ -228,6 +228,7 @@ The Health module extends Saath to assist adult children with their parents' dai
 3. **Medications Entered by Children, Never Extracted:** Prescriptions remain strictly blocked by the medical safety guardrail. The agent never infers or extracts drug names or dosages from document photos.
 4. **Diagnostic Reports & Prescriptions Still Blocked:** Lab reports and clinical documents continue directly to the empathetic guardrail refusal.
 5. **Times in India Standard Time (IST):** All schedules, doses, and logs are evaluated and recorded in IST (`Asia/Kolkata`).
+6. **Live Heart Rate from Watch:** Live heart rate from any watch or strap that broadcasts the standard Bluetooth heart-rate profile (tested with Apple Watch Series 5 via HeartBLE/HeartCast).
 
 ### Vitals Evaluation Benchmark (15 Typed Items)
 

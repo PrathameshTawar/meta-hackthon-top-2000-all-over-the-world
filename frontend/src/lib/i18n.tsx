@@ -72,6 +72,14 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     "dose_status_taken": "Taken",
     "dose_status_missed": "Missed",
     "evidence_badge": "Evidence",
+    "connect_watch": "Connect watch",
+    "disconnect_watch": "Disconnect",
+    "watch_connected": "Watch connected",
+    "watch_disconnected": "Watch disconnected",
+    "from_watch": "from watch",
+    "watch_not_supported": "Watch connection works in Chrome or Edge on Android, Windows or Mac, over HTTPS.",
+    "wearing_watch": "Wearing watch",
+    "live_heart_rate": "Live Heart Rate",
   },
   mr: {
     // Header
@@ -133,6 +141,14 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     "dose_status_taken": "घेतली",
     "dose_status_missed": "बुडाली",
     "evidence_badge": "पुरावा",
+    "connect_watch": "स्मार्टवॉच जोडा",
+    "disconnect_watch": "डिस्कनेक्ट",
+    "watch_connected": "घड्याळ जोडले",
+    "watch_disconnected": "घड्याळ डिस्कनेक्ट झाले",
+    "from_watch": "घड्याळातून",
+    "watch_not_supported": "घड्याळ जोडणी केवळ Chrome किंवा Edge (Android, Windows किंवा Mac वर HTTPS सह) चालते.",
+    "wearing_watch": "कोणाच्या हातात आहे",
+    "live_heart_rate": "थेट हृदयाचे ठोके",
   },
   hi: {
     // Header
@@ -194,6 +210,14 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     "dose_status_taken": "ले ली",
     "dose_status_missed": "छूटी",
     "evidence_badge": "साक्ष्य",
+    "connect_watch": "स्मार्टवॉच कनेक्ट करें",
+    "disconnect_watch": "डिस्कनेक्ट",
+    "watch_connected": "घड़ी कनेक्टेड",
+    "watch_disconnected": "घड़ी डिस्कनेक्ट हुई",
+    "from_watch": "स्मार्टवॉच से",
+    "watch_not_supported": "घड़ी कनेक्शन केवल Chrome या Edge (Android, Windows या Mac पर HTTPS पर) काम करता है।",
+    "wearing_watch": "किसके हाथ में है",
+    "live_heart_rate": "लाइव हृदय गति",
   },
 };
 
