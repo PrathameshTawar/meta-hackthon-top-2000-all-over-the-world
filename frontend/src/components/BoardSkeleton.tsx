@@ -2,13 +2,12 @@
 
 export function BoardSkeleton() {
   return (
-    <div className="flex flex-col h-[calc(100vh-65px)] bg-khata-canvas overflow-hidden animate-fadeIn">
+    <div className="flex flex-col h-[calc(100vh-65px)] bg-khata-canvas overflow-hidden">
       {/* 1. Warm Branded Loading Banner / Transition Bar */}
       <div className="bg-brand-50/60 border-b border-brand-200/50 px-6 py-2 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className="relative flex items-center justify-center w-6 h-6 rounded-md bg-brand-500 text-white font-bold text-xs shadow-2xs">
-            <span className="relative z-10 animate-pulse">स</span>
-            <span className="absolute inset-0 rounded-md bg-brand-400 animate-ping opacity-30" />
+            <span>स</span>
           </div>
           <div className="flex items-center gap-2 text-xs">
             <span className="font-semibold text-brand-900">
@@ -97,7 +96,7 @@ export function BoardSkeleton() {
         {[
           { title: "01 NEW & ESCALATED", rail: "border-l-brand-500", cards: 2 },
           { title: "02 NEEDS REVIEW", rail: "border-l-ochre-500", cards: 1 },
-          { title: "03 CLAIMED", rail: "border-l-indigo-600", cards: 2 },
+          { title: "03 CLAIMED", rail: "border-l-blue-600", cards: 2 },
           { title: "04 SETTLED / DONE", rail: "border-l-sage-600", cards: 2 },
         ].map((col, idx) => (
           <div

@@ -179,7 +179,7 @@ export function TaskDetailPanel({ task, members, onClose }: TaskDetailPanelProps
           <button
             onClick={() => claimMutation.mutate()}
             disabled={claimMutation.isPending}
-            className="flex-1 bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white rounded-lg px-4 py-2.5 text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer active:scale-98 disabled:opacity-50"
+            className="flex-1 bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white rounded-lg px-4 py-2.5 text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
           >
             {claimMutation.isPending ? t("claiming") : t("claim_task")}
           </button>
@@ -188,7 +188,7 @@ export function TaskDetailPanel({ task, members, onClose }: TaskDetailPanelProps
           <button
             onClick={() => doneMutation.mutate()}
             disabled={doneMutation.isPending}
-            className="flex-1 bg-sage-600 hover:bg-sage-700 active:bg-sage-800 text-white rounded-lg px-4 py-2.5 text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer active:scale-98 disabled:opacity-50"
+            className="flex-1 bg-sage-600 hover:bg-sage-700 active:bg-sage-800 text-white rounded-lg px-4 py-2.5 text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
           >
             <CheckCircle2 size={15} />
             {doneMutation.isPending ? t("marking") : t("mark_done")}

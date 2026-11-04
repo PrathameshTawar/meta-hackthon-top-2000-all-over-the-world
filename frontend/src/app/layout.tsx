@@ -3,25 +3,25 @@ import "./globals.css";
 import { Providers } from "./providers";
 
 export const viewport: Viewport = {
-  themeColor: "#e8962a",
+  themeColor: "#c85a17",
 };
 
 export const metadata: Metadata = {
-  title: "Saath (साथ) — Family Coordination Board",
+  title: "Saath (साथ): Family Coordination Board",
   description: "Coordinate ageing parents' bills, pensions, and obligations across cities",
   manifest: "/manifest.json",
   icons: {
-    icon: "/icon.svg",
-    apple: "/icon.svg",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/apple-touch-icon.png",
   },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <head>
-        <link rel="apple-touch-icon" href="/icon.svg" />
-      </head>
       <body>
         <Providers>{children}</Providers>
         <script

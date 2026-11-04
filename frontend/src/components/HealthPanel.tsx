@@ -274,7 +274,7 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
                   <div>
                     {d.status === "taken" && (
                       <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold font-mono bg-sage-100 text-sage-800 border border-sage-200 shadow-2xs">
-                        <CheckCircle2 size={12} /> taken ✅
+                        <CheckCircle2 size={12} /> taken
                       </span>
                     )}
                     {d.status === "pending" && (
@@ -284,7 +284,7 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
                     )}
                     {d.status === "missed" && (
                       <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold font-mono bg-sindoor-100 text-sindoor-800 border border-sindoor-200 shadow-2xs">
-                        <AlertTriangle size={12} /> missed ⚠️ (escalated)
+                        <AlertTriangle size={12} /> missed (escalated)
                       </span>
                     )}
                   </div>
@@ -414,7 +414,7 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
                           <span className="w-2.5 h-2.5 rounded-full bg-sindoor-600"></span> Systolic
                         </span>
                         <span className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-full bg-indigo-600"></span> Diastolic
+                          <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span> Diastolic
                         </span>
                         {bpThreshold && (
                           <span className="flex items-center gap-1.5 text-sindoor-700 font-semibold font-mono">
@@ -642,7 +642,7 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
           </div>
           <button
             onClick={() => setIsAddMedOpen(!isAddMedOpen)}
-            className="flex items-center gap-1.5 text-xs font-semibold bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white rounded-lg px-3 py-1.5 transition-all cursor-pointer shadow-2xs active:scale-98"
+            className="flex items-center gap-1.5 text-xs font-semibold bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white rounded-lg px-3 py-1.5 transition-all cursor-pointer shadow-2xs"
           >
             <Plus size={14} />
             Add Medicine

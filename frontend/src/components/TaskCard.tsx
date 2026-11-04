@@ -34,8 +34,8 @@ const CATEGORY_STYLES: Record<string, { label: string; badge: string; rail: stri
   },
   appointment: {
     label: "Appointment",
-    badge: "bg-indigo-100/80 text-indigo-900 border-indigo-200",
-    rail: "border-l-indigo-600",
+    badge: "bg-blue-100/80 text-blue-900 border-blue-200",
+    rail: "border-l-blue-600",
   },
   medical: {
     label: "Medical Care",
@@ -99,7 +99,7 @@ export function TaskCard({ task, members, isSelected, onClick }: TaskCardProps) 
           >
             <Calendar size={10} className={overdue ? "text-sindoor-600" : "text-khata-muted"} />
             {format(dueDate, "dd MMM")}
-            {overdue && " ⚠️"}
+            {overdue && <span className="sr-only">overdue</span>}
           </span>
         )}
       </div>

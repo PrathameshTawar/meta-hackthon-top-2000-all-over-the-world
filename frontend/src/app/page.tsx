@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Board } from "@/components/Board";
 import { useI18n } from "@/lib/i18n";
 import { Globe, ShieldCheck } from "lucide-react";
@@ -16,7 +17,7 @@ export default function HomePage() {
       <header className="bg-white/95 backdrop-blur-sm border-b border-khata-subtle px-6 py-3 flex flex-wrap items-center justify-between gap-4 sticky top-0 z-20">
         <div className="flex items-center gap-3.5">
           {/* Authentic Terracotta Seal Mark */}
-          <div className="w-8 h-8 rounded-lg bg-brand-500 border border-brand-600 flex items-center justify-center text-white font-bold text-sm shadow-xs transition-transform hover:scale-105">
+          <div className="w-8 h-8 rounded-lg bg-brand-500 border border-brand-600 flex items-center justify-center text-white font-bold text-sm shadow-xs">
             <span className="font-devanagari select-none text-base">स</span>
           </div>
 
@@ -41,6 +42,10 @@ export default function HomePage() {
 
         {/* Global Language Switcher for foreign judges & family members */}
         <div className="flex items-center gap-3">
+          <nav className="flex items-center gap-3 text-[11px] text-khata-muted">
+            <Link href="/privacy" className="hover:text-khata-ink">Privacy</Link>
+            <Link href="/terms" className="hover:text-khata-ink">Terms</Link>
+          </nav>
           <div className="flex items-center bg-khata-raised rounded-lg p-0.5 border border-khata-subtle">
             <button
               onClick={() => setLang("en")}

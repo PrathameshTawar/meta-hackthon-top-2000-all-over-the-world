@@ -11,13 +11,13 @@ import { AuditLogModal } from "./AuditLogModal";
 import { SimulateModal } from "./SimulateModal";
 import { HealthPanel } from "./HealthPanel";
 import { BoardSkeleton } from "./BoardSkeleton";
-import { FastForward, Sparkles, Activity, RotateCcw, AlertTriangle, CheckCircle2, HeartPulse, CheckSquare } from "lucide-react";
+import { FastForward, Inbox, Activity, RotateCcw, AlertTriangle, CheckCircle2, HeartPulse, CheckSquare } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
 const COLUMNS: { statuses: TaskStatus[]; labelKey: string; index: string; dotColor: string }[] = [
   { statuses: ["new", "confirmed", "escalated"], labelKey: "col_new", index: "01", dotColor: "bg-brand-500" },
   { statuses: ["needs_review"], labelKey: "col_needs_review", index: "02", dotColor: "bg-ochre-500" },
-  { statuses: ["claimed"], labelKey: "col_claimed", index: "03", dotColor: "bg-indigo-600" },
+  { statuses: ["claimed"], labelKey: "col_claimed", index: "03", dotColor: "bg-blue-600" },
   { statuses: ["done"], labelKey: "col_done", index: "04", dotColor: "bg-sage-600" },
 ];
 
@@ -50,7 +50,7 @@ export function Board({ householdId }: BoardProps) {
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["tasks", householdId] });
       queryClient.invalidateQueries({ queryKey: ["events", householdId] });
-      setToastMessage(`⚡ Fast-forwarded 3 days: ${res.count} unclaimed task(s) escalated to siblings!`);
+      setToastMessage(`Skipped ahead 3 days. ${res.count} unclaimed task(s) escalated to siblings.`);
       setTimeout(() => setToastMessage(null), 4500);
     },
   });
@@ -128,23 +128,23 @@ export function Board({ householdId }: BoardProps) {
         {/* Demo buttons */}
         <div className="flex items-center gap-2">
           {toastMessage && (
-            <span className="text-xs font-medium text-ochre-900 bg-ochre-100 border border-ochre-200 rounded-lg px-2.5 py-1 animate-pulse">
+            <span className="text-xs font-medium text-ochre-900 bg-ochre-100 border border-ochre-200 rounded-lg px-2.5 py-1">
               {toastMessage}
             </span>
           )}
 
           <button
             onClick={() => setIsSimulateOpen(true)}
-            className="flex items-center gap-1.5 text-xs font-semibold bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white rounded-lg px-3.5 py-1.5 transition-all shadow-2xs cursor-pointer hover:shadow-xs active:scale-98"
+            className="flex items-center gap-1.5 text-xs font-semibold bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white rounded-lg px-3.5 py-1.5 transition-all shadow-2xs cursor-pointer hover:shadow-xs"
           >
-            <Sparkles size={14} />
+            <Inbox size={14} />
             {t("try_live_agent")}
           </button>
 
           <button
             onClick={() => escalateMutation.mutate()}
             disabled={escalateMutation.isPending}
-            className="flex items-center gap-1.5 text-xs font-semibold bg-ochre-700 hover:bg-ochre-800 active:bg-ochre-900 text-white rounded-lg px-3 py-1.5 transition-all shadow-2xs cursor-pointer hover:shadow-xs active:scale-98 disabled:opacity-50"
+            className="flex items-center gap-1.5 text-xs font-semibold bg-ochre-700 hover:bg-ochre-800 active:bg-ochre-900 text-white rounded-lg px-3 py-1.5 transition-all shadow-2xs cursor-pointer hover:shadow-xs disabled:opacity-50"
             title="Simulate advancing clock by 3 days to test escalation near deadline"
           >
             <FastForward size={14} />

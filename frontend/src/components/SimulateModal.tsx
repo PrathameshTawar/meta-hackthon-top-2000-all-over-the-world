@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { simulateIngest, getHealthSummary, simulateDoseNow, simulateSkipHealth } from "@/lib/api";
-import { X, Play, Sparkles, Mic, FileText, ShieldAlert, CopyCheck, HeartPulse, Clock, FastForward, Pill } from "lucide-react";
+import { X, Play, Inbox, Mic, FileText, ShieldAlert, CopyCheck, HeartPulse, Clock, FastForward, Pill } from "lucide-react";
 import clsx from "clsx";
 
 interface SimulateModalProps {
@@ -87,7 +87,7 @@ export function SimulateModal({ householdId, isOpen, onClose }: SimulateModalPro
     mutationFn: (medId: number) => simulateDoseNow(medId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["healthSummary", householdId] });
-      setHealthActionMessage("✅ Dose reminder sent to parent immediately!");
+      setHealthActionMessage("Dose reminder sent to parent.");
       setTimeout(() => setHealthActionMessage(null), 3500);
     },
   });
@@ -96,7 +96,7 @@ export function SimulateModal({ householdId, isOpen, onClose }: SimulateModalPro
     mutationFn: () => simulateSkipHealth(120),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["healthSummary", householdId] });
-      setHealthActionMessage(`⚡ Advanced 2 hours: ${res.escalated_doses_count} missed dose(s) escalated to child!`);
+      setHealthActionMessage(`Skipped ahead 2 hours. ${res.escalated_doses_count} missed dose(s) escalated to a child.`);
       setTimeout(() => setHealthActionMessage(null), 3500);
     },
   });
@@ -110,7 +110,7 @@ export function SimulateModal({ householdId, isOpen, onClose }: SimulateModalPro
         <div className="flex items-center justify-between px-6 py-4 border-b border-khata-subtle bg-khata-raised/60">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-600 shadow-2xs">
-              <Sparkles size={18} />
+              <Inbox size={18} />
             </div>
             <div>
               <h2 className="text-base font-bold text-khata-ink">Try Live Agent Demo</h2>
@@ -212,7 +212,7 @@ export function SimulateModal({ householdId, isOpen, onClose }: SimulateModalPro
                       if (idToUse) doseNowMutation.mutate(idToUse);
                     }}
                     disabled={doseNowMutation.isPending || medications.length === 0}
-                    className="px-2.5 py-1.5 rounded-lg bg-sage-600 text-white text-xs font-bold hover:bg-sage-700 disabled:opacity-50 cursor-pointer flex items-center gap-1 shrink-0 shadow-2xs active:scale-98"
+                    className="px-2.5 py-1.5 rounded-lg bg-sage-600 text-white text-xs font-bold hover:bg-sage-700 disabled:opacity-50 cursor-pointer flex items-center gap-1 shrink-0 shadow-2xs"
                   >
                     <Clock size={12} />
                     Dose Now
@@ -232,7 +232,7 @@ export function SimulateModal({ householdId, isOpen, onClose }: SimulateModalPro
                   <button
                     onClick={() => skipHealthMutation.mutate()}
                     disabled={skipHealthMutation.isPending}
-                    className="px-2.5 py-1.5 rounded-lg bg-ochre-700 text-white text-xs font-bold hover:bg-ochre-800 disabled:opacity-50 cursor-pointer flex items-center gap-1 shrink-0 shadow-2xs active:scale-98"
+                    className="px-2.5 py-1.5 rounded-lg bg-ochre-700 text-white text-xs font-bold hover:bg-ochre-800 disabled:opacity-50 cursor-pointer flex items-center gap-1 shrink-0 shadow-2xs"
                   >
                     <FastForward size={12} />
                     Skip 2h
@@ -246,12 +246,12 @@ export function SimulateModal({ householdId, isOpen, onClose }: SimulateModalPro
         {/* Footer */}
         <div className="px-6 py-4 border-t border-khata-subtle bg-khata-raised/50 flex items-center justify-between">
           <span className="text-[11px] font-mono text-khata-muted">
-            Perceive ➔ Classify ➔ Extract ➔ Verify ➔ Dedupe ➔ Assign
+            Perceive → Classify → Extract → Verify → Dedupe → Assign
           </span>
           <button
             onClick={() => ingestMutation.mutate()}
             disabled={ingestMutation.isPending || !selectedText.trim()}
-            className="flex items-center gap-1.5 text-xs font-bold bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white rounded-lg px-4 py-2 transition-all shadow-2xs cursor-pointer active:scale-98 disabled:opacity-50"
+            className="flex items-center gap-1.5 text-xs font-bold bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white rounded-lg px-4 py-2 transition-all shadow-2xs cursor-pointer disabled:opacity-50"
           >
             <Play size={14} />
             {ingestMutation.isPending ? "Processing Graph…" : "Run Agent Graph"}

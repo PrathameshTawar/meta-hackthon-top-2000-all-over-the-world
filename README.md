@@ -1,10 +1,10 @@
-# Saath (साथ) — Family Coordination Agent
+# Saath (साथ): Family Coordination Agent
 
 > *"Saath: your parents' bills and care, handled together."*  
 > **Meta Global AI Developer Hackathon 2026** · Oct 27 – Nov 4, 2026  
 > **Track:** Build for Your World  
-> **Demo Video:** [Watch 3-minute Video Walkthrough](https://youtu.be/demo) *(Recording in progress — link coming before submission deadline)*  
-> **Live Web App:** [https://saath-demo.vercel.app](https://saath-demo.vercel.app) *(Deployment in progress — local preview available at http://localhost:3000)*  
+> **Demo Video:** not published yet  
+> **Live Web App:** not deployed yet. Run it locally at http://localhost:3000  
 > **Telegram Bot:** [@SaathFamilyBot](https://t.me/SaathFamilyBot) *(Bot registered on Telegram; long-polling active locally)* · **WhatsApp Cloud API:** Meta Cloud API v22.0  
 > **Repository:** [https://github.com/PrathameshTawar/meta-hackthon-top-2000-all-over-the-world](https://github.com/PrathameshTawar/meta-hackthon-top-2000-all-over-the-world)  
 
@@ -24,38 +24,38 @@ A parent sends a Marathi or Hindi voice note or bill photo over WhatsApp (or Tel
 
 Saath is evaluated against three distinct offline test suites: our headline **Held-Out Generalization Suite** (zero-memorized payees, Devanagari numerals, real noise, and edge cases), our **Regression Suite** (measuring baseline regression performance), and a **Health Vitals Suite**.
 
-### 1. Headline: Held-Out Generalization Set (26 Items — Zero Memorization)
+### 1. Headline: Held-Out Generalization Set (26 Items, Zero Memorization)
 > *Note on Holdout Integrity:* The 26-item holdout set tests unseen utility providers (BEST, Adani Electricity, Jio, BSNL, New India Assurance), Devanagari numerals (`₹१,८४०`), rotated/noisy OCR transcripts, separate disconnection vs due dates, and boundary cases. None of these payees appear anywhere in the codebase keyword dictionary. The keyword baseline scores 62.5% on unseen items, leaving clear room for Meta Muse Spark to demonstrate multimodal generalization.
 
 | Test Slice | Items | Metric Evaluated | Target | Keyword Baseline (No AI) | Meta Muse Spark (Multimodal) | Saath Guardrail | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Unseen Utilities & Invoices** | 17 | Field accuracy (unseen payees, noisy OCR, Devanagari numerals) | Generalization | **62.5%** | **89.6%** (+27.1% gain) | — | ✅ Passed (Strong Generalization) |
-| **Diagnostic Lab Reports** | 4 | Guardrail refusal recall (blood/lipid tests) | 100% | 0 of 4 (0% Refusal) | **100.0% (4 of 4)** | **4 of 4 (100% Refusal)** | ✅ Passed (Zero Leakage) |
-| **Medical Hospital Bills & Invoices** | 5 | Guardrail false-refusal rate (must track as bill) | 0.0% | 0.0% (5 of 5 tracked) | Tracked as bill | **0.0% False Refusal** | ✅ Passed (Zero False Refusal) |
-| **Keyword baseline latency (no model calls)** | 26 | Median: 5.6 ms · p95: 9.1 ms (isolated test DB) | < 5000 ms | **5.6 ms** | — | — | ✅ Passed |
-| **Multimodal Model Pipeline Latency** | 26 | Inference & LangGraph pipeline roundtrip | < 5000 ms | — | **13.3 s median** (cached: 12 ms) | — | ✅ Passed |
+| **Unseen Utilities & Invoices** | 17 | Field accuracy (unseen payees, noisy OCR, Devanagari numerals) | Generalization | **62.5%** | **89.6%** (+27.1% gain) | n/a | Passed (Strong Generalization) |
+| **Diagnostic Lab Reports** | 4 | Guardrail refusal recall (blood/lipid tests) | 100% | 0 of 4 (0% Refusal) | **100.0% (4 of 4)** | **4 of 4 (100% Refusal)** | Passed (Zero Leakage) |
+| **Medical Hospital Bills & Invoices** | 5 | Guardrail false-refusal rate (must track as bill) | 0.0% | 0.0% (5 of 5 tracked) | Tracked as bill | **0.0% False Refusal** | Passed (Zero False Refusal) |
+| **Keyword baseline latency (no model calls)** | 26 | Median: 5.6 ms · p95: 9.1 ms (isolated test DB) | < 5000 ms | **5.6 ms** | n/a | n/a | Passed |
+| **Multimodal Model Pipeline Latency** | 26 | Inference & LangGraph pipeline roundtrip | < 5000 ms | n/a | **13.3 s median** (cached: 12 ms) | n/a | Passed |
 
 ### 2. Regression Suite (40 Items / 35 Test Cases)
 > *Note on Suite Design:* Immutable regression suite ensuring that existing Mahavitaran, Tata Power, and hospital bill extraction accuracy, cross-lingual deduplication, and medical boundary enforcement remain unbroken.
 
 | Test Slice | Items | Metric Evaluated | Target | Baseline (No AI) | Saath Guardrail | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Bill & letter photos** | 15 | Field accuracy: amount, due date, payee | 85%+ | 97.8% | — | ✅ Passed |
-| **Voice notes (Marathi/Hindi)** | 10 | Field accuracy & category accuracy | 80%+ | 96.7% | — | ✅ Passed |
-| **Cross-lingual duplicate pairs** | 10 (5 pairs) | Correctly merged into single task | 5 of 5 | 5 of 5 (100%) | — | ✅ Passed |
-| **Medical content & lab reports** | 5 | Guardrail recall: refused diagnostic advice | 5 of 5 | 0 of 5 (0% Refusal) | 5 of 5 (100% Refusal) | ✅ Passed |
-| **Medical bills & insurance** | 5 | False refusal rate: bills must NOT be refused | 0.0% | 0.0% (5/5 tracked) | 0.0% (5/5 tracked) | ✅ Passed |
-| **Overall Regression Accuracy** | **40** | **Field Accuracy: 96.0%** · **Merge Rate: 100%** · **Latency: 5.7 ms median, 11.8 ms p95** | **85%+** | **96.0%** | **100% Recall** | ✅ Passed |
+| **Bill & letter photos** | 15 | Field accuracy: amount, due date, payee | 85%+ | 97.8% | n/a | Passed |
+| **Voice notes (Marathi/Hindi)** | 10 | Field accuracy & category accuracy | 80%+ | 96.7% | n/a | Passed |
+| **Cross-lingual duplicate pairs** | 10 (5 pairs) | Correctly merged into single task | 5 of 5 | 5 of 5 (100%) | n/a | Passed |
+| **Medical content & lab reports** | 5 | Guardrail recall: refused diagnostic advice | 5 of 5 | 0 of 5 (0% Refusal) | 5 of 5 (100% Refusal) | Passed |
+| **Medical bills & insurance** | 5 | False refusal rate: bills must NOT be refused | 0.0% | 0.0% (5/5 tracked) | 0.0% (5/5 tracked) | Passed |
+| **Overall Regression Accuracy** | **40** | **Field Accuracy: 96.0%** · **Merge Rate: 100%** · **Latency: 5.7 ms median, 11.8 ms p95** | **85%+** | **96.0%** | **100% Recall** | Passed |
 
-### 3. Vitals Benchmark Suite (15 Items — Marathi, Hindi & English)
+### 3. Vitals Benchmark Suite (15 Items: Marathi, Hindi & English)
 > *Note on Vitals Evaluation:* The 15-item vitals evaluation slice tests readings across Marathi, Hindi, and English, covering Devanagari numerals (`१५०/९५`), separators (`/`, `by`, `वर`), multi-reading messages (BP + Pulse), implausible values (dropped by safety bounds), and strict rejection of non-vitals (diagnostic lab tests, prescriptions, bills with slash numbers, status queries, and chit-chat).
 
 | Test Slice | Items | Metric Evaluated | Target | Measured Result | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Vitals Readings Extraction** | 10 (9 readings) | Reading-level accuracy (kind, value_1, value_2) | 90%+ | **100.0% (9 of 9)** | ✅ Passed |
-| **Family-Set Threshold Alerts** | 5 | Threshold alert decision accuracy (code comparison) | 100% | **100.0% (5 of 5)** | ✅ Passed |
-| **Non-Vital Rejection** | 5 | Rejection recall (must NOT log as vitals) | 100% | **100.0% (5 of 5)** | ✅ Passed |
-| **Pipeline Latency** | 15 | Median: 13.2 ms · p95: 24.4 ms | < 5000 ms | **13.2 ms** | ✅ Passed |
+| **Vitals Readings Extraction** | 10 (9 readings) | Reading-level accuracy (kind, value_1, value_2) | 90%+ | **100.0% (9 of 9)** | Passed |
+| **Family-Set Threshold Alerts** | 5 | Threshold alert decision accuracy (code comparison) | 100% | **100.0% (5 of 5)** | Passed |
+| **Non-Vital Rejection** | 5 | Rejection recall (must NOT log as vitals) | 100% | **100.0% (5 of 5)** | Passed |
+| **Pipeline Latency** | 15 | Median: 13.2 ms · p95: 24.4 ms | < 5000 ms | **13.2 ms** | Passed |
 
 > **Evaluation Transparency & Reproducibility:**  
 > Running `python -m tests.run_eval --set holdout` or `--set regression` or `--set vitals` (or `--set all`) runs against an isolated SQLite test database with zero side effects. Model responses are cached in `backend/tests/eval_set/cache/` so evaluators and judges can reproduce benchmark numbers without needing an active API key.
@@ -152,7 +152,7 @@ Every field extracted by the agent must be accompanied by the **exact verbatim s
 5. **Persistent Interrupt & Human-in-the-Loop:** Blurry or low-confidence documents trigger interactive WhatsApp and Telegram confirmation buttons (`[Correct (होय)]`, `[Wrong (नाही)]`), resuming execution through LangGraph `Command(resume=...)`.
 6. **Open-Task Round-Robin Load Balancing:** When no family member owns a category, new tasks are assigned to the sibling with the fewest open active tasks, balancing family responsibility fairly.
 7. **Transparent Audit Logging:** Every agent perception, classification, verification, and human intervention is logged to an immutable `events` table with human-readable rationales.
-8. **Fast-Forward Escalation Simulation:** An hourly APScheduler monitors tasks due within 3 days without a claim. The board includes a **"⚡ Fast-Forward 3 Days"** simulation button to test escalations live.
+8. **Fast-Forward Escalation Simulation:** An hourly APScheduler monitors tasks due within 3 days without a claim. The board includes a **"Fast-Forward 3 Days"** simulation button to test escalations live.
 
 ---
 
@@ -240,10 +240,10 @@ The Health module extends Saath to assist adult children with their parents' dai
 
 | Metric | Measured Result | Target | Status |
 | :--- | :--- | :--- | :--- |
-| **Reading-Level Accuracy (kind + values)** | 100.0% (9 of 9) | 90%+ | ✅ PASSED |
-| **Threshold Decision Accuracy** | 100.0% (5 of 5) | 100% | ✅ PASSED |
-| **Non-Vital Correctly Not Logged** | 100.0% (5 of 5) | 100% | ✅ PASSED |
-| **Pipeline Latency** | Median: 14.6 ms, p95: 30.5 ms | < 5000 ms | ✅ PASSED |
+| **Reading-Level Accuracy (kind + values)** | 100.0% (9 of 9) | 90%+ | Passed |
+| **Threshold Decision Accuracy** | 100.0% (5 of 5) | 100% | Passed |
+| **Non-Vital Correctly Not Logged** | 100.0% (5 of 5) | 100% | Passed |
+| **Pipeline Latency** | Median: 14.6 ms, p95: 30.5 ms | < 5000 ms | Passed |
 
 ---
 
@@ -258,7 +258,7 @@ Saath is built for non-English-literate Indian parents while ensuring global hac
 
 ### 2. Verbatim Evidence Translation Toggle
 - Authentic Marathi and Hindi bills contain regional vocabulary (e.g. *"महावितरण वीज देयक"*, *"एकूण देय रक्कम: ₹१,८४०"*).
-- Under each extracted field in the **Task Detail** drawer, judges can click **"🌐 Translate to English"** to view high-fidelity English translations side-by-side with the verbatim original quote.
+- Under each extracted field in the **Task Detail** drawer, judges can click **"Translate to English"** to view high-fidelity English translations side-by-side with the verbatim original quote.
 - Clicking **"↩ Show Original"** toggles back instantly.
 
 ### 3. Per-Member Language Preference & Clean Single-Script Buttons

@@ -24,7 +24,7 @@ export function EvidenceHighlight({ quote, fieldName }: EvidenceHighlightProps) 
         </p>
         <button
           onClick={() => setIsTranslated(!isTranslated)}
-          className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-khata-ink bg-white border border-khata-subtle hover:bg-khata-raised rounded-md px-2.5 py-1 transition-all cursor-pointer shadow-2xs active:scale-98"
+          className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-khata-ink bg-white border border-khata-subtle hover:bg-khata-raised rounded-md px-2.5 py-1 transition-all cursor-pointer shadow-2xs"
           title="Toggle English translation for judges and non-Marathi speakers"
         >
           {isTranslated ? (
