@@ -93,19 +93,19 @@ Resources:
   ServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow inbound HTTP and HTTPS; manage securely via AWS SSM Session Manager
+      GroupDescription: Allow inbound HTTP and HTTPS and manage via AWS SSM Session Manager
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
-          Description: HTTP for web traffic and ACME Let's Encrypt verification
+          Description: HTTP for web traffic and ACME verification
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           CidrIp: 0.0.0.0/0
-          Description: HTTPS for Web Board and WhatsApp/Telegram Webhooks
+          Description: HTTPS for Web Board and Webhooks
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
@@ -314,3 +314,4 @@ Outputs:
   InstanceId:
     Description: EC2 Instance ID (use with aws ssm start-session)
     Value: !Ref EC2Instance
+
