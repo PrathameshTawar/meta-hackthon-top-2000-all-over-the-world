@@ -320,7 +320,7 @@ async def test_parent_notification_on_task_done():
         if not parent:
             parent = Member(
                 household_id=1,
-                name="Aai (सुनीता कुलकर्णी)",
+                name="Poonam Tawre (Aai)",
                 role=MemberRole.parent,
                 telegram_id=f"parent_{uuid.uuid4().hex[:6]}",
                 phone="+919800000002",

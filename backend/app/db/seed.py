@@ -45,7 +45,7 @@ async def seed_data():
         )
         aai = Member(
             household_id=household.id,
-            name="Aai (सुनीता कुलकर्णी)",
+            name="Poonam Tawre (Aai)",
             role=MemberRole.parent,
             telegram_id="aai_pune",
             phone=os.getenv("DEMO_AAI_PHONE", "+919800000002"),
@@ -82,17 +82,17 @@ async def seed_data():
         )
 
         # Guardian who lives near the parents and gets a copy of every alert
-        kavita = Member(
+        poonam = Member(
             household_id=household.id,
-            name="Kavita (नाशिक)",
+            name="Poonam Dhumal (नाशिक)",
             role=MemberRole.helper,
-            telegram_id="kavita_nsk",
+            telegram_id="poonam_nsk",
             phone=os.getenv("DEMO_GUARDIAN_PHONE", "+919800000006"),
             categories_owned=[],
             language="mr",
         )
 
-        db.add_all([baba, aai, rohan, priya, amit, kavita])
+        db.add_all([baba, aai, rohan, priya, amit, poonam])
         await db.flush()
 
         # 3. Artifacts (Raw voice transcripts and OCR documents)
