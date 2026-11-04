@@ -14,6 +14,13 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Ensure AWS CLI is in PATH if installed in standard location
+if (-not (Get-Command aws -ErrorAction SilentlyContinue)) {
+    if (Test-Path "C:\Program Files\Amazon\AWSCLIV2\aws.exe") {
+        $env:PATH = "C:\Program Files\Amazon\AWSCLIV2;$env:PATH"
+    }
+}
+
 if (-not (Test-Path $EnvFile)) {
     Write-Error "Could not find env file at '$EnvFile'. Please run from the repository root."
     exit 1
