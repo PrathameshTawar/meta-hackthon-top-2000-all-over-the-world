@@ -37,7 +37,7 @@ if database_host:
         database=database_name,
     ).render_as_string(hide_password=False)
 else:
-    db_url = settings.database_url
+    db_url = os.getenv("DATABASE_URL") or settings.database_url
 
 if db_url.startswith("sqlite"):
     connect_args["check_same_thread"] = False
