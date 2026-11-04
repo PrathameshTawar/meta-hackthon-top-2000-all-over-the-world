@@ -192,6 +192,12 @@ npm install
 npm run dev
 ```
 
+#### AWS Deployment
+Saath can be deployed on AWS in ~10 minutes using EC2 + Docker Compose (Free Tier eligible) or via the production CloudFormation template (`infra/saath-aws.yaml` with ECS Fargate + ALB + RDS PostgreSQL).
+- See the complete step-by-step guide: [**AWS Deployment Guide**](docs/AWS_DEPLOYMENT_GUIDE.md)
+- 1-Click EC2 Bootstrap script: [`infra/deploy-ec2.sh`](infra/deploy-ec2.sh)
+- CloudFormation Template: [`infra/saath-aws.yaml`](infra/saath-aws.yaml)
+
 #### Run the Benchmark Test Suite
 ```bash
 cd backend
