@@ -13,7 +13,8 @@ from app.api import artifacts, tasks, members, households, webhooks, events, adm
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    await seed_data()  # auto-seed demo household if empty
+    if settings.environment != "production":
+        await seed_data()
     scheduler = start_scheduler() if settings.run_scheduler else None
     yield
     if scheduler:
@@ -28,10 +29,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Secure CORS: explicit origin list for frontend and local development
+# Secure CORS: explicit origin list and regex for frontend, duckdns, and local development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=settings.all_cors_origins,
+    allow_origin_regex=r"^https?://([a-zA-Z0-9-]+\.)?duckdns\.org(:\d+)?$|^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],

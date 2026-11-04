@@ -25,7 +25,18 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:8000",
+        "https://saath-app.duckdns.org",
+        "https://saath-api.duckdns.org",
     ]
+
+    @property
+    def all_cors_origins(self) -> List[str]:
+        origins = set(self.cors_origins)
+        if self.frontend_url:
+            origins.add(self.frontend_url.rstrip("/"))
+        if self.base_url:
+            origins.add(self.base_url.rstrip("/"))
+        return list(origins)
 
     # Telegram
     telegram_bot_token: str = ""
