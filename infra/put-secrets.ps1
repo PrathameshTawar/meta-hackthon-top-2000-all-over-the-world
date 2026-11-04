@@ -6,7 +6,8 @@
 param(
     [string]$EnvFile = ".env",
     [string]$Region = "ap-south-1",
-    [string]$Profile = "saath",
+    [Alias("Profile")]
+    [string]$AwsProfile = "saath",
     [string]$PathPrefix = "/saath",
     [switch]$DryRun = $false
 )
@@ -20,7 +21,7 @@ if (-not (Test-Path $EnvFile)) {
 
 Write-Host "=======================================================" -ForegroundColor Cyan
 Write-Host "   UPLOADING SAATH SECRETS TO AWS PARAMETER STORE      " -ForegroundColor Cyan
-Write-Host "   Region: $Region | Profile: $Profile | Prefix: $PathPrefix" -ForegroundColor Cyan
+Write-Host "   Region: $Region | Profile: $AwsProfile | Prefix: $PathPrefix" -ForegroundColor Cyan
 if ($DryRun) {
     Write-Host "   MODE: DRY-RUN (No changes will be made to AWS)      " -ForegroundColor Yellow
 }
@@ -101,7 +102,7 @@ foreach ($line in $lines) {
                     --type "SecureString" `
                     --overwrite `
                     --region $Region `
-                    --profile $Profile | Out-Null
+                    --profile $AwsProfile | Out-Null
                 Write-Host "  [+] Stored $paramName" -ForegroundColor Green
                 $storedCount++
             }
