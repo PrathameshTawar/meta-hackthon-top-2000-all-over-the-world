@@ -32,4 +32,23 @@ jobs:
 
       - name: Run unit & regression tests
         run: |
-          pytest tests/test_agent_pipeline.py -v
+          pytest -q -rx
+
+  test-frontend:
+    name: Frontend Unit Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      # The unit tests import only dependency-free modules, so no npm install is needed.
+      - name: Run unit tests
+        run: npm test
