@@ -468,13 +468,8 @@ async def record_device_vital(
         )
         recent_alert_events = recent_events_res.scalars().all()
 
-        children_res = await db.execute(
-            select(Member).where(
-                Member.household_id == household_id,
-                Member.role == MemberRole.child,
-            )
-        )
-        children = children_res.scalars().all()
+        from app.services.recipients import get_alert_recipients
+        children = await get_alert_recipients(household_id, db)
 
         time_hh_mm = now_ist.strftime("%H:%M")
         reading_str = f"{payload.value} bpm"
@@ -498,8 +493,11 @@ async def record_device_vital(
                 f"beyond the limit your family set ({limit_expr}{note_str}). Please check in."
             )
 
+            # The member who set the limit (else everyone), plus every guardian
             target_children = [c for c in children if c.id == th.set_by_member_id]
-            if not target_children:
+            if target_children:
+                target_children += [c for c in children if c.role == MemberRole.helper and c not in target_children]
+            else:
                 target_children = children
 
             try:

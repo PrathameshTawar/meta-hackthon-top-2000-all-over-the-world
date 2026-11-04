@@ -81,7 +81,18 @@ async def seed_data():
             language="en",
         )
 
-        db.add_all([baba, aai, rohan, priya, amit])
+        # Guardian who lives near the parents and gets a copy of every alert
+        kavita = Member(
+            household_id=household.id,
+            name="Kavita (नाशिक)",
+            role=MemberRole.helper,
+            telegram_id="kavita_nsk",
+            phone=os.getenv("DEMO_GUARDIAN_PHONE", "+919800000006"),
+            categories_owned=[],
+            language="mr",
+        )
+
+        db.add_all([baba, aai, rohan, priya, amit, kavita])
         await db.flush()
 
         # 3. Artifacts (Raw voice transcripts and OCR documents)

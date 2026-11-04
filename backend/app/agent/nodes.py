@@ -953,6 +953,7 @@ async def node_scam_guardrail(state: AgentState) -> dict:
     household_id = state.get("household_id")
 
     children = []
+    guardians = []
     lang = "mr"
     if household_id:
         async with AsyncSessionLocal() as db:
@@ -960,21 +961,18 @@ async def node_scam_guardrail(state: AgentState) -> dict:
             if hh and hh.primary_language:
                 lang = hh.primary_language
 
-            c_res = await db.execute(
-                select(Member).where(
-                    Member.household_id == household_id,
-                    Member.role == MemberRole.child,
-                )
-            )
-            children = c_res.scalars().all()
+            from app.services.recipients import get_alert_recipients
+            recipients = await get_alert_recipients(household_id, db)
+            children = [m for m in recipients if m.role == MemberRole.child]
+            guardians = [m for m in recipients if m.role == MemberRole.helper]
 
-    # Pick recipient: category owner for bank/government if set, else all children
+    # Pick recipient: category owner for bank/government if set, else all children; guardians always get a copy
     category_owners = []
     for c in children:
         cats = c.categories_owned or []
         if any(cat in cats for cat in ("bank", "government", "govt_letter")):
             category_owners.append(c)
-    target_children = category_owners if category_owners else children
+    target_children = (category_owners if category_owners else children) + guardians
 
     snippet = raw_text[:120].strip()
     alert_text = (
@@ -1292,13 +1290,8 @@ async def node_vital(state: AgentState) -> dict:
         )
         thresholds = thresh_res.scalars().all()
 
-        children_res = await db.execute(
-            select(Member).where(
-                Member.household_id == household_id,
-                Member.role == MemberRole.child,
-            )
-        )
-        children = children_res.scalars().all()
+        from app.services.recipients import get_alert_recipients
+        children = await get_alert_recipients(household_id, db)
 
         threshold_crossed = False
         notified_threshold_ids = set()
@@ -1338,8 +1331,11 @@ async def node_vital(state: AgentState) -> dict:
                         f"beyond the limit your family set ({limit_expr}{note_str}). Please check in."
                     )
 
+                    # The member who set the limit (else everyone), plus every guardian
                     target_children = [c for c in children if c.id == th.set_by_member_id]
-                    if not target_children:
+                    if target_children:
+                        target_children += [c for c in children if c.role == MemberRole.helper and c not in target_children]
+                    else:
                         target_children = children
 
                     try:

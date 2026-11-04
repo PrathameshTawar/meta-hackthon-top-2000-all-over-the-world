@@ -326,15 +326,11 @@ async def notify_parents_task_done(task: Task, completed_by_name: str = "कु�
 
 
 async def _notify_siblings_new_task(household_id: int, task_id: int, sibling_notification: str, sender_chat_id: str | int = ""):
-    """Alerts siblings on Telegram and WhatsApp with watch-friendly action buttons."""
+    """Alerts siblings and guardians on Telegram and WhatsApp with watch-friendly action buttons."""
+    from app.services.recipients import get_alert_recipients
+
     async with AsyncSessionLocal() as db:
-        children_res = await db.execute(
-            select(Member).where(
-                Member.household_id == household_id,
-                Member.role == MemberRole.child,
-            )
-        )
-        children = children_res.scalars().all()
+        children = await get_alert_recipients(household_id, db)
 
         for child in children:
             if str(child.telegram_id) != str(sender_chat_id) and str(child.phone) != str(sender_chat_id):
@@ -408,6 +404,9 @@ async def _run_agent(artifact_id: int, household_id: int, artifact_type: str, fi
                 )
                 children = children_res.scalars().all()
 
+                from app.services.recipients import get_alert_recipients
+                guardians = [m for m in await get_alert_recipients(household_id, db) if m.role == MemberRole.helper]
+
                 # Identify sender member
                 sender_member = None
                 if channel == "telegram":
@@ -449,37 +448,40 @@ async def _run_agent(artifact_id: int, household_id: int, artifact_type: str, fi
                 else:
                     await _send_whatsapp_message(chat_id, parent_reassurance)
 
-            # Route confirmation buttons to target sibling
-            s_lang = getattr(target_sibling, "language", None) or "en" if target_sibling else "en"
-            if reasons:
-                reasons_text = "\n".join(f"• {r}" for r in reasons)
-                confirm_text = (
-                    f"❓ *{t('please_verify_title', s_lang)}*:\n{interrupted_question}\n\n"
-                    f"*{t('why_verification_needed', s_lang)}*:\n{reasons_text}"
-                )
-            else:
-                confirm_text = (
-                    f"❓ *{t('please_verify_title', s_lang)}*:\n{interrupted_question}"
-                )
-            tg_reply_markup = {
-                "inline_keyboard": [
-                    [
-                        {"text": f"✅ {t('btn_correct', s_lang)}", "callback_data": f"confirm_yes:{artifact_id}"},
-                        {"text": f"❌ {t('btn_wrong', s_lang)}", "callback_data": f"confirm_no:{artifact_id}"},
-                    ],
-                    [
-                        {"text": f"📋 {t('btn_view_board', s_lang)}", "url": settings.frontend_url},
-                    ],
+            # Route confirmation buttons to the target sibling, with a copy to each guardian
+            def build_confirmation(lang: str):
+                if reasons:
+                    reasons_text = "\n".join(f"• {r}" for r in reasons)
+                    text = (
+                        f"❓ *{t('please_verify_title', lang)}*:\n{interrupted_question}\n\n"
+                        f"*{t('why_verification_needed', lang)}*:\n{reasons_text}"
+                    )
+                else:
+                    text = f"❓ *{t('please_verify_title', lang)}*:\n{interrupted_question}"
+                tg_markup = {
+                    "inline_keyboard": [
+                        [
+                            {"text": f"✅ {t('btn_correct', lang)}", "callback_data": f"confirm_yes:{artifact_id}"},
+                            {"text": f"❌ {t('btn_wrong', lang)}", "callback_data": f"confirm_no:{artifact_id}"},
+                        ],
+                        [
+                            {"text": f"📋 {t('btn_view_board', lang)}", "url": settings.frontend_url},
+                        ],
+                    ]
+                }
+                buttons = [
+                    {"id": f"confirm_yes:{artifact_id}", "title": t("btn_correct", lang)[:20]},
+                    {"id": f"confirm_no:{artifact_id}", "title": t("btn_wrong", lang)[:20]},
                 ]
-            }
-            wa_buttons = [
-                {"id": f"confirm_yes:{artifact_id}", "title": t("btn_correct", s_lang)[:20]},
-                {"id": f"confirm_no:{artifact_id}", "title": t("btn_wrong", s_lang)[:20]},
-            ]
+                return text, tg_markup, buttons
 
-            if target_sibling:
+            confirm_recipients = ([target_sibling] if target_sibling else []) + guardians
+            for recipient in confirm_recipients:
+                confirm_text, tg_reply_markup, wa_buttons = build_confirmation(
+                    getattr(recipient, "language", None) or "en"
+                )
                 await notify(
-                    member=target_sibling,
+                    member=recipient,
                     text=confirm_text,
                     buttons=wa_buttons,
                     template_name="saath_please_check",
@@ -488,8 +490,9 @@ async def _run_agent(artifact_id: int, household_id: int, artifact_type: str, fi
                     template_language="en_US",
                     reply_markup=tg_reply_markup,
                 )
-            else:
-                # Fallback to sender if no sibling registered in household
+            if not confirm_recipients:
+                # Fallback to sender if no sibling or guardian registered in household
+                confirm_text, tg_reply_markup, wa_buttons = build_confirmation("en")
                 if channel == "telegram":
                     await _send_telegram_message(chat_id, confirm_text, reply_markup=tg_reply_markup)
                 else:

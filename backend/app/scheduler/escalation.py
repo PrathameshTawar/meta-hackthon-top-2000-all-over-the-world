@@ -14,6 +14,7 @@ from app.config import settings
 from app.db.models import Task, TaskStatus, Member, MemberRole, Event
 from app.db.session import AsyncSessionLocal
 from app.api.webhooks import notify, _clean_template_param
+from app.services.recipients import get_alert_recipients
 
 logger = logging.getLogger(__name__)
 
@@ -98,14 +99,8 @@ async def run_escalation(simulated_days_ahead: int = 0) -> list[int]:
         overdue_tasks = result.scalars().all()
 
         for task in overdue_tasks:
-            # Get all children in the household
-            members_result = await db.execute(
-                select(Member).where(
-                    Member.household_id == task.household_id,
-                    Member.role == MemberRole.child,
-                )
-            )
-            children = members_result.scalars().all()
+            # Get all children and guardians in the household
+            children = await get_alert_recipients(task.household_id, db)
             if not children:
                 continue
 
@@ -121,7 +116,7 @@ async def run_escalation(simulated_days_ahead: int = 0) -> list[int]:
                 e.payload.get("member_id") for e in sent_events if e.payload and isinstance(e.payload, dict)
             }
 
-            # If all children already notified, nothing left to do
+            # If all children and guardians already notified, nothing left to do
             unnotified_children = [c for c in children if c.id not in already_notified_member_ids]
             if not unnotified_children:
                 continue

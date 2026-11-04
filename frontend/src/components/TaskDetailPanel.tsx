@@ -140,7 +140,9 @@ export function TaskDetailPanel({ task, members, onClose }: TaskDetailPanelProps
               </div>
               <div>
                 <span className="text-xs font-bold text-khata-ink">{assignee.name}</span>
-                <span className="text-[11px] text-khata-muted block capitalize font-medium">{assignee.role}</span>
+                <span className="text-[11px] text-khata-muted block font-medium">
+                  {t(assignee.role === "helper" ? "role_guardian" : assignee.role === "child" ? "role_sibling" : "role_parent")}
+                </span>
               </div>
             </div>
           ) : (

@@ -153,6 +153,7 @@ Every field extracted by the agent must be accompanied by the **exact verbatim s
 6. **Open-Task Round-Robin Load Balancing:** When no family member owns a category, new tasks are assigned to the sibling with the fewest open active tasks, balancing family responsibility fairly.
 7. **Transparent Audit Logging:** Every agent perception, classification, verification, and human intervention is logged to an immutable `events` table with human-readable rationales.
 8. **Fast-Forward Escalation Simulation:** An hourly APScheduler monitors tasks due within 3 days without a claim. The board includes a **"Fast-Forward 3 Days"** simulation button to test escalations live.
+9. **Guardians Stay in the Loop:** Every update goes to all siblings and to the guardian who lives with or near the parent.
 
 ---
 

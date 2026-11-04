@@ -12,6 +12,7 @@ from app.db.models import (
 )
 from app.agent.nodes import get_current_ist_datetime
 from app.api.webhooks import notify
+from app.services.recipients import guardians_of
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,16 @@ class DoseTakenResult(str, enum.Enum):
     late_ok = "late_ok"
     not_found = "not_found"
     household_mismatch = "household_mismatch"
+
+
+def _dose_alert_recipients(med: Medication) -> List[Member]:
+    """The owner child (or every child if none is set), plus every guardian."""
+    members = med.household.members if med.household and med.household.members else []
+    if med.owner_child:
+        recipients: List[Member] = [med.owner_child]
+    else:
+        recipients = [m for m in members if m.role == MemberRole.child]
+    return recipients + guardians_of(members)
 
 
 async def ensure_todays_doses(now: Optional[datetime] = None) -> int:
@@ -176,11 +187,7 @@ async def escalate_missed_doses(now: Optional[datetime] = None) -> int:
             escalated_count += 1
 
             # Determine who to notify
-            recipients: List[Member] = []
-            if med.owner_child:
-                recipients.append(med.owner_child)
-            elif med.household and med.household.members:
-                recipients = [m for m in med.household.members if m.role == MemberRole.child]
+            recipients = _dose_alert_recipients(med)
 
             msg_text = f"{parent_name} hasn't confirmed taking {med_name} (scheduled {hh_mm}). Please check in with them."
 
@@ -257,11 +264,7 @@ async def record_dose_taken(dose_id: int, member: Member) -> Tuple[DoseTakenResu
             med_name = med.name
             update_text = f"Update: {parent_name} has now taken {med_name}."
 
-            recipients: List[Member] = []
-            if med.owner_child:
-                recipients.append(med.owner_child)
-            elif med.household and med.household.members:
-                recipients = [m for m in med.household.members if m.role == MemberRole.child]
+            recipients = _dose_alert_recipients(med)
 
             for child in recipients:
                 await notify(member=child, text=update_text)

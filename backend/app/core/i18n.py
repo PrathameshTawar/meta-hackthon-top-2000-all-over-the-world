@@ -66,9 +66,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "hi": "✅ काम #{task_id} ('{title}') आपने स्वीकार कर लिया है।\nपूरा होने पर 'पूर्ण हुआ' दबाएं।",
     },
     "task_already_claimed": {
-        "en": "⚠️ This task has already been claimed by another sibling.",
-        "mr": "⚠️ हे काम आधीच दुसऱ्या भावंडाने स्वीकारले आहे.",
-        "hi": "⚠️ यह काम पहले ही दूसरे भाई/बहन ने ले लिया है।",
+        "en": "⚠️ Someone else in the family has already claimed this task.",
+        "mr": "⚠️ हे काम कुटुंबातील दुसऱ्या कोणीतरी आधीच स्वीकारले आहे.",
+        "hi": "⚠️ यह काम परिवार में किसी और ने पहले ही ले लिया है।",
     },
     "task_already_yours": {
         "en": "You have already claimed this task.",

@@ -707,6 +707,7 @@ export function HealthPanel({ householdId, members }: HealthPanelProps) {
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
+                <p className="mt-1 text-[10px] text-khata-muted">{t("guardians_also_alerted")}</p>
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
