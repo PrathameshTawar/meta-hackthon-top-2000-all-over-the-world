@@ -1,0 +1,316 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Saath Production Deployment - Single EC2 with Docker Compose, Encrypted EBS, SSM Parameter Store Secrets, and Automated HTTPS via Caddy.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: saath
+    Description: Prefix for AWS resources
+
+  AppDomain:
+    Type: String
+    Description: Full domain or subdomain for the Next.js Web Board (e.g. saath-app.duckdns.org)
+
+  ApiDomain:
+    Type: String
+    Description: Full domain or subdomain for the FastAPI Backend & Webhooks (e.g. saath-api.duckdns.org)
+
+  InstanceType:
+    Type: String
+    Default: t3.small
+    AllowedValues:
+      - t3.micro
+      - t3.small
+      - t3.medium
+      - t4g.small
+      - t4g.medium
+    Description: EC2 instance type (t3.small recommended for Next.js builds)
+
+  UbuntuAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id
+    Description: Dynamic SSM parameter lookup for latest official Ubuntu 24.04 LTS AMI
+
+Resources:
+  # ── Network: Minimal Dedicated VPC ──────────────────────────────────────────
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-vpc
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-igw
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-public-subnet
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-public-rt
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref RouteTable
+
+  # ── Security Group (HTTP / HTTPS Only - No Port 22) ─────────────────────────
+  ServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow inbound HTTP and HTTPS; manage securely via AWS SSM Session Manager
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP for web traffic and ACME Let's Encrypt verification
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS for Web Board and WhatsApp/Telegram Webhooks
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow outbound traffic for Meta AI API, WhatsApp, Telegram, package updates
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-sg
+
+  # ── IAM Role & Instance Profile for SSM and Parameter Store ─────────────────
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${EnvironmentName}-ec2-ssm-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: SaathParameterStoreReadPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParametersByPath
+                  - ssm:GetParameters
+                  - ssm:GetParameter
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/saath*"
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                Resource: "*"
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2InstanceRole
+
+  # ── Elastic IP (Fixed Public IP for DuckDNS) ────────────────────────────────
+  ServerEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-eip
+
+  ServerEIPAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt ServerEIP.AllocationId
+      InstanceId: !Ref EC2Instance
+
+  # ── EC2 Server ─────────────────────────────────────────────────────────────
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Ref UbuntuAmiId
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref ServerSecurityGroup
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 30
+            VolumeType: gp3
+            Encrypted: true
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-server
+      UserData:
+        Fn::Base64: !Sub |
+          #!/usr/bin/env bash
+          set -euo pipefail
+          exec > >(tee -a /var/log/saath-bootstrap.log) 2>&1
+          echo "=== Starting Saath Bootstrap at $(date -u) ==="
+
+          export DEBIAN_FRONTEND=noninteractive
+
+          # 1. Update and install base packages
+          apt-get update -y
+          apt-get install -y ca-certificates curl gnupg git jq unzip debian-keyring debian-archive-keyring apt-transport-https
+
+          # 2. Install official AWS CLI v2 if not present
+          if ! command -v aws &> /dev/null; then
+            echo "Installing AWS CLI v2..."
+            curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
+            unzip -q /tmp/awscliv2.zip -d /tmp
+            /tmp/aws/install
+            rm -rf /tmp/awscliv2.zip /tmp/aws
+          fi
+
+          # 3. Install Docker Engine and Docker Compose Plugin
+          if ! command -v docker &> /dev/null; then
+            echo "Installing Docker..."
+            install -m 0755 -d /etc/apt/keyrings
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+            chmod a+r /etc/apt/keyrings/docker.gpg
+            echo \
+              "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+              $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+              tee /etc/apt/sources.list.d/docker.list > /dev/null
+            apt-get update -y
+            apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+          fi
+
+          # 4. Install Caddy for automated Let's Encrypt HTTPS
+          if ! command -v caddy &> /dev/null; then
+            echo "Installing Caddy..."
+            curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+            curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+            apt-get update -y
+            apt-get install -y caddy
+          fi
+
+          # 5. Clone repository
+          APP_DIR="/opt/saath"
+          if [ -d "$APP_DIR" ]; then
+            cd "$APP_DIR"
+            git pull origin main
+          else
+            git clone "https://github.com/PrathameshTawar/meta-hackthon-top-2000-all-over-the-world.git" "$APP_DIR"
+            cd "$APP_DIR"
+          fi
+
+          # 6. Fetch secrets from AWS Systems Manager Parameter Store under /saath
+          echo "Reading encrypted secrets from AWS SSM Parameter Store..."
+          PARAM_JSON=$(aws ssm get-parameters-by-path \
+            --path "/saath" \
+            --with-decryption \
+            --region "${AWS::Region}" \
+            --output json || echo '{"Parameters":[]}')
+
+          # 7. Construct production .env file
+          cat << 'EOF' > "$APP_DIR/.env"
+          # Generated automatically by Saath CloudFormation Bootstrap
+          ENVIRONMENT=production
+          BASE_URL=https://${ApiDomain}
+          FRONTEND_URL=https://${AppDomain}
+          NEXT_PUBLIC_API_URL=https://${ApiDomain}
+          DATABASE_URL=sqlite+aiosqlite:////data/saath.db
+          CHECKPOINTS_DB_PATH=/data/checkpoints.db
+          DEFAULT_LANGUAGE=mr
+          EOF
+
+          # Append all secrets retrieved from SSM Parameter Store
+          echo "$PARAM_JSON" | jq -r '.Parameters[] | "\(.Name | split("/")[-1])=\(.Value)"' >> "$APP_DIR/.env"
+
+          # 8. Configure Caddy reverse proxy for automated HTTPS
+          echo "Configuring Caddy for ${AppDomain} and ${ApiDomain}..."
+          cat << 'EOF' > /etc/caddy/Caddyfile
+          ${AppDomain} {
+              reverse_proxy 127.0.0.1:3000
+          }
+
+          ${ApiDomain} {
+              reverse_proxy 127.0.0.1:8000
+          }
+          EOF
+
+          systemctl restart caddy
+          systemctl enable caddy
+
+          # 9. Build and launch Docker Compose services
+          echo "Building and launching Saath containers..."
+          cd "$APP_DIR"
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml down --remove-orphans || true
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+
+          echo "=== Saath Bootstrap Finished Successfully at $(date -u) ==="
+
+Outputs:
+  PublicIpAddress:
+    Description: Fixed Public Elastic IP address. Point BOTH DuckDNS domains to this IP address.
+    Value: !Ref ServerEIP
+
+  AppUrl:
+    Description: Next.js Web Board HTTPS URL
+    Value: !Sub "https://${AppDomain}"
+
+  ApiUrl:
+    Description: FastAPI Backend HTTPS URL
+    Value: !Sub "https://${ApiDomain}"
+
+  ApiHealthUrl:
+    Description: Health Check URL
+    Value: !Sub "https://${ApiDomain}/healthz"
+
+  WhatsAppCallbackUrl:
+    Description: Meta WhatsApp Cloud API Webhook Callback URL
+    Value: !Sub "https://${ApiDomain}/chat/webhook"
+
+  TelegramWebhookUrl:
+    Description: Telegram Bot Webhook URL
+    Value: !Sub "https://${ApiDomain}/webhook/telegram"
+
+  InstanceId:
+    Description: EC2 Instance ID (use with aws ssm start-session)
+    Value: !Ref EC2Instance

@@ -63,3 +63,4 @@ echo "   - Web Board (Frontend): http://$(curl -s http://169.254.169.254/latest/
 echo "   - API Backend:          http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 || echo 'YOUR_SERVER_IP'):8000"
 echo "   - Health Check:         http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 || echo 'YOUR_SERVER_IP'):8000/healthz"
 echo "======================================================="
+

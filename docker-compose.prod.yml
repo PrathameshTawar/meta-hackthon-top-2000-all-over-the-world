@@ -1,0 +1,22 @@
+version: "3.9"
+
+services:
+  backend:
+    restart: always
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - DATABASE_URL=sqlite+aiosqlite:////data/saath.db
+      - CHECKPOINTS_DB_PATH=/data/checkpoints.db
+
+  frontend:
+    restart: always
+    ports:
+      - "127.0.0.1:3000:3000"
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_ADMIN_SECRET: ${ADMIN_SECRET}
