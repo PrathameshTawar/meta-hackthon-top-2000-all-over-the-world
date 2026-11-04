@@ -133,55 +133,51 @@ sudo systemctl restart caddy
 
 ---
 
-## Method 2: CloudFormation Production Architecture (ECS Fargate + RDS + ALB)
+## Method 2: CloudFormation Production Deployment
 
-Use this method if you want a serverless AWS infrastructure using the committed CloudFormation template in [`infra/saath-aws.yaml`](../infra/saath-aws.yaml).
+The CloudFormation template in [`infra/saath-aws.yaml`](../infra/saath-aws.yaml) deploys one HTTPS application endpoint, private ECS Fargate tasks, private Multi-AZ PostgreSQL, encrypted EFS checkpoint storage, Secrets Manager secrets, and per-AZ NAT gateways. This managed setup costs significantly more than the EC2 demo path; estimate costs in your AWS region before creating the stack.
 
-### Prerequisites:
-- AWS CLI configured locally (`aws configure`).
-- Docker installed locally or access to AWS CloudShell.
+### Prerequisites
+- AWS account with permissions to create VPC, EC2 networking, Route 53, ACM, ECR, ECS, EFS, RDS, Secrets Manager, IAM, and CloudWatch resources.
+- AWS CLI and Docker installed.
+- A Route 53 hosted zone and an **issued ACM certificate in the same AWS region** covering the chosen application hostname.
+- Two ECR repositories in the deployment region.
 
-### Step 1: Create Amazon ECR Repositories
+### 1. Prepare ECR
+
+Set the AWS region and authenticate:
 ```bash
-aws ecr create-repository --repository-name saath-backend --region us-east-1
-aws ecr create-repository --repository-name saath-frontend --region us-east-1
-```
-
-### Step 2: Build & Push Images to ECR
-```bash
-# Log in to ECR
+export AWS_REGION=us-east-1
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com
-
-# Build & Push Backend
-docker build -t saath-backend:latest ./backend
-docker tag saath-backend:latest ${ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/saath-backend:latest
-docker push ${ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/saath-backend:latest
-
-# Build & Push Frontend
-docker build -t saath-frontend:latest ./frontend
-docker tag saath-frontend:latest ${ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/saath-frontend:latest
-docker push ${ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/saath-frontend:latest
+aws ecr create-repository --repository-name saath-backend --region "$AWS_REGION"
+aws ecr create-repository --repository-name saath-frontend --region "$AWS_REGION"
+aws ecr get-login-password --region "$AWS_REGION" |
+  docker login --username AWS --password-stdin "$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
 ```
 
-### Step 3: Deploy CloudFormation Stack
-1. Go to **AWS CloudFormation** in the AWS Console.
-2. Click **Create stack** → **With new resources (standard)**.
-3. Choose **Upload a template file** and select `infra/saath-aws.yaml`.
-4. Enter Stack details:
-   - **Stack name:** `saath-production`
-   - **BackendImage:** `<ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/saath-backend:latest`
-   - **FrontendImage:** `<ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/saath-frontend:latest`
-   - **DBPassword:** `<Strong-Master-Password>`
-   - **AdminSecret:** `<Your-Admin-Token>`
-   - **LLMApiKey:** `<Your-Meta-API-Key>`
-5. Click **Next** → Acknowledge IAM capabilities → Click **Submit**.
+### 2. Build and push the application images
 
-CloudFormation provisions:
-- Custom VPC (2 Public Subnets, 2 Private Subnets, Internet Gateway, NAT Gateway).
-- Application Load Balancer routing port 80/443 to Frontend (port 3000) and `/api/*` / `/webhook/*` to Backend (port 8000).
-- Amazon RDS PostgreSQL database (`db.t4g.micro`).
-- Amazon ECS Fargate cluster with health checks and auto-restart.
+Build from the repository root. The frontend uses same-origin API paths; the ALB routes those API paths to the backend:
+```bash
+docker build -t saath-backend:latest ./backend
+docker tag saath-backend:latest "$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/saath-backend:latest"
+docker push "$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/saath-backend:latest"
 
-The deployment takes ~12–15 minutes. Once complete, check the **Outputs** tab for the ALB DNS URL.
+docker build --build-arg NEXT_PUBLIC_API_URL=/ -t saath-frontend:latest ./frontend
+docker tag saath-frontend:latest "$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/saath-frontend:latest"
+docker push "$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/saath-frontend:latest"
+```
 
+### 3. Create the CloudFormation stack
+
+In **CloudFormation → Create stack → With new resources (standard)**, upload `infra/saath-aws.yaml`. Provide:
+- `DomainName`: hostname such as `saath.example.com`.
+- `HostedZoneId`: Route 53 hosted zone containing that name.
+- `CertificateArn`: issued ACM certificate ARN for the hostname, in the selected region.
+- `BackendImage` and `FrontendImage`: the two ECR image URIs pushed above.
+- `AdminSecret`: at least 32 random characters.
+- `LLMApiKey`: required for model-powered features. Messaging secrets can be left blank if unused.
+
+RDS generates and manages its master password in Secrets Manager. Review the stack’s resource and cost plan, acknowledge the IAM capability, and create the stack. The template creates two NAT gateways and a Multi-AZ RDS instance, so this is not a free-tier deployment. The RDS instance has deletion protection enabled and a retained snapshot policy; plan database cleanup separately.
+
+When creation completes, use the `ApplicationURL` output. HTTP redirects to HTTPS. Production starts with an empty database (demo seed data is disabled). The backend runs one replica because the current in-process scheduler is not leader-elected; backend deployments may briefly interrupt API requests. The admin secret is only injected into the backend, not exposed to browsers. This application currently has no user login/authentication flow, so the board's admin-only controls are not available through the production frontend until proper user authentication is implemented.

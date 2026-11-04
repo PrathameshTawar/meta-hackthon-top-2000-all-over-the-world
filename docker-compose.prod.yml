@@ -20,3 +20,4 @@ services:
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
         NEXT_PUBLIC_ADMIN_SECRET: ${ADMIN_SECRET}
+

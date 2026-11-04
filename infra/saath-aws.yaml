@@ -1,56 +1,51 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Saath deployment on AWS ECS Fargate + ALB + RDS PostgreSQL
+Description: >-
+  Production-oriented Saath deployment using one HTTPS ALB, private ECS Fargate
+  tasks, private PostgreSQL RDS, Secrets Manager, and multi-AZ networking.
 
 Parameters:
   EnvironmentName:
     Type: String
     Default: saath
-    Description: Prefix for AWS resources
+    AllowedPattern: "^[a-zA-Z][a-zA-Z0-9-]{1,19}$"
+    Description: Prefix for resources created by this stack.
 
-  VpcCIDR:
+  DomainName:
     Type: String
-    Default: 10.0.0.0/16
+    Description: Public DNS name for the application, covered by CertificateArn.
 
-  PublicSubnet1CIDR:
+  HostedZoneId:
     Type: String
-    Default: 10.0.1.0/24
+    Description: Route 53 hosted zone ID that contains DomainName.
 
-  PublicSubnet2CIDR:
+  CertificateArn:
     Type: String
-    Default: 10.0.2.0/24
-
-  PrivateSubnet1CIDR:
-    Type: String
-    Default: 10.0.11.0/24
-
-  PrivateSubnet2CIDR:
-    Type: String
-    Default: 10.0.12.0/24
+    Description: ARN of an issued ACM certificate in this stack's AWS region.
 
   FrontendImage:
     Type: String
-    Default: 123456789012.dkr.ecr.us-east-1.amazonaws.com/saath-frontend:latest
+    Description: URI of the frontend image in ECR, built with NEXT_PUBLIC_API_URL set to /.
 
   BackendImage:
     Type: String
-    Default: 123456789012.dkr.ecr.us-east-1.amazonaws.com/saath-backend:latest
+    Description: URI of the backend image in ECR.
 
   DBName:
     Type: String
     Default: saath
+    AllowedPattern: "^[a-zA-Z][a-zA-Z0-9]*$"
 
   DBUsername:
     Type: String
     Default: saath
-
-  DBPassword:
-    Type: String
-    NoEcho: true
+    AllowedPattern: "^[a-zA-Z][a-zA-Z0-9]*$"
 
   AdminSecret:
     Type: String
     NoEcho: true
-    Description: Board admin secret token (leave blank to require manual input on deploy)
+    MinLength: 32
+    MaxLength: 256
+    Description: Long random secret for backend admin endpoints. Never put this in the frontend.
 
   LLMBaseURL:
     Type: String
@@ -93,6 +88,37 @@ Parameters:
   DefaultLanguage:
     Type: String
     Default: mr
+    AllowedValues:
+      - mr
+      - hi
+
+  VpcCIDR:
+    Type: String
+    Default: 10.0.0.0/16
+
+  PublicSubnet1CIDR:
+    Type: String
+    Default: 10.0.1.0/24
+
+  PublicSubnet2CIDR:
+    Type: String
+    Default: 10.0.2.0/24
+
+  PrivateSubnet1CIDR:
+    Type: String
+    Default: 10.0.11.0/24
+
+  PrivateSubnet2CIDR:
+    Type: String
+    Default: 10.0.12.0/24
+
+Conditions:
+  HasLLMApiKey: !Not [!Equals [!Ref LLMApiKey, ""]]
+  HasWhatsAppToken: !Not [!Equals [!Ref WhatsAppToken, ""]]
+  HasWhatsAppVerifyToken: !Not [!Equals [!Ref WhatsAppVerifyToken, ""]]
+  HasWhatsAppAppSecret: !Not [!Equals [!Ref WhatsAppAppSecret, ""]]
+  HasTelegramBotToken: !Not [!Equals [!Ref TelegramBotToken, ""]]
+  HasTelegramWebhookSecret: !Not [!Equals [!Ref TelegramWebhookSecret, ""]]
 
 Resources:
   VPC:
@@ -103,14 +129,14 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName}-vpc
+          Value: !Sub "${EnvironmentName}-vpc"
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName}-igw
+          Value: !Sub "${EnvironmentName}-igw"
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -127,7 +153,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName}-public-1
+          Value: !Sub "${EnvironmentName}-public-1"
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -138,7 +164,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName}-public-2
+          Value: !Sub "${EnvironmentName}-public-2"
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -149,7 +175,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName}-private-1
+          Value: !Sub "${EnvironmentName}-private-1"
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -160,17 +186,14 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName}-private-2
+          Value: !Sub "${EnvironmentName}-private-2"
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-public-routes
 
-  DefaultPublicRoute:
+  PublicDefaultRoute:
     Type: AWS::EC2::Route
     DependsOn: InternetGatewayAttachment
     Properties:
@@ -178,140 +201,285 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
 
-  PublicSubnet1RouteTableAssociation:
+  PublicSubnet1RouteAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnet1
 
-  PublicSubnet2RouteTableAssociation:
+  PublicSubnet2RouteAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnet2
 
-  PrivateRouteTable:
+  NatEip1:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatEip2:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    DependsOn: PublicSubnet1RouteAssociation
+    Properties:
+      AllocationId: !GetAtt NatEip1.AllocationId
+      SubnetId: !Ref PublicSubnet1
+
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    DependsOn: PublicSubnet2RouteAssociation
+    Properties:
+      AllocationId: !GetAtt NatEip2.AllocationId
+      SubnetId: !Ref PublicSubnet2
+
+  PrivateRouteTable1:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-private-routes
 
-  PrivateSubnet1RouteTableAssociation:
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PrivateDefaultRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateDefaultRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
+
+  PrivateSubnet1RouteAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PrivateRouteTable
+      RouteTableId: !Ref PrivateRouteTable1
       SubnetId: !Ref PrivateSubnet1
 
-  PrivateSubnet2RouteTableAssociation:
+  PrivateSubnet2RouteAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PrivateRouteTable
+      RouteTableId: !Ref PrivateRouteTable2
       SubnetId: !Ref PrivateSubnet2
 
-  ECSSecurityGroup:
+  LoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: ECS tasks security group
+      GroupDescription: Public HTTPS entry point
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+  FrontendSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Frontend tasks accept traffic only from the ALB
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+
+  BackendSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Backend tasks accept traffic only from the ALB
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 8000
           ToPort: 8000
-          SourceSecurityGroupId: !Ref BackendALBSecurityGroup
-        - IpProtocol: tcp
-          FromPort: 3000
-          ToPort: 3000
-          SourceSecurityGroupId: !Ref FrontendALBSecurityGroup
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-ecs-sg
-
-  BackendALBSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Backend ALB security group
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-backend-alb-sg
-
-  FrontendALBSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Frontend ALB security group
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-frontend-alb-sg
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
 
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Database security group
+      GroupDescription: PostgreSQL accepts traffic only from backend tasks
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 5432
           ToPort: 5432
-          SourceSecurityGroupId: !Ref ECSSecurityGroup
-      Tags:
+          SourceSecurityGroupId: !Ref BackendSecurityGroup
+
+  CheckpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: EFS accepts NFS only from backend tasks
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          SourceSecurityGroupId: !Ref BackendSecurityGroup
+
+  CheckpointFileSystem:
+    Type: AWS::EFS::FileSystem
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Encrypted: true
+      BackupPolicy:
+        Status: ENABLED
+      LifecyclePolicies:
+        - TransitionToIA: AFTER_30_DAYS
+      FileSystemTags:
         - Key: Name
-          Value: !Sub ${EnvironmentName}-db-sg
+          Value: !Sub "${EnvironmentName}-checkpoints"
+
+  CheckpointAccessPoint:
+    Type: AWS::EFS::AccessPoint
+    Properties:
+      FileSystemId: !Ref CheckpointFileSystem
+      PosixUser:
+        Uid: "1000"
+        Gid: "1000"
+      RootDirectory:
+        Path: /checkpoints
+        CreationInfo:
+          OwnerUid: "1000"
+          OwnerGid: "1000"
+          Permissions: "0750"
+
+  CheckpointMountTarget1:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref CheckpointFileSystem
+      SubnetId: !Ref PrivateSubnet1
+      SecurityGroups:
+        - !Ref CheckpointSecurityGroup
+
+  CheckpointMountTarget2:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref CheckpointFileSystem
+      SubnetId: !Ref PrivateSubnet2
+      SecurityGroups:
+        - !Ref CheckpointSecurityGroup
 
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupDescription: RDS subnet group
+      DBSubnetGroupDescription: Private subnets for Saath PostgreSQL
       SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
 
+  AdminSecretValue:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${EnvironmentName}/admin-secret"
+      Description: Saath backend admin API secret
+      SecretString: !Ref AdminSecret
+
+  LLMApiKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Condition: HasLLMApiKey
+    Properties:
+      Name: !Sub "${EnvironmentName}/llm-api-key"
+      SecretString: !Ref LLMApiKey
+
+  WhatsAppTokenSecret:
+    Type: AWS::SecretsManager::Secret
+    Condition: HasWhatsAppToken
+    Properties:
+      Name: !Sub "${EnvironmentName}/whatsapp-token"
+      SecretString: !Ref WhatsAppToken
+
+  WhatsAppVerifyTokenSecret:
+    Type: AWS::SecretsManager::Secret
+    Condition: HasWhatsAppVerifyToken
+    Properties:
+      Name: !Sub "${EnvironmentName}/whatsapp-verify-token"
+      SecretString: !Ref WhatsAppVerifyToken
+
+  WhatsAppAppSecretValue:
+    Type: AWS::SecretsManager::Secret
+    Condition: HasWhatsAppAppSecret
+    Properties:
+      Name: !Sub "${EnvironmentName}/whatsapp-app-secret"
+      SecretString: !Ref WhatsAppAppSecret
+
+  TelegramBotTokenSecret:
+    Type: AWS::SecretsManager::Secret
+    Condition: HasTelegramBotToken
+    Properties:
+      Name: !Sub "${EnvironmentName}/telegram-bot-token"
+      SecretString: !Ref TelegramBotToken
+
+  TelegramWebhookSecretValue:
+    Type: AWS::SecretsManager::Secret
+    Condition: HasTelegramWebhookSecret
+    Properties:
+      Name: !Sub "${EnvironmentName}/telegram-webhook-secret"
+      SecretString: !Ref TelegramWebhookSecret
+
   DBInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBName: !Ref DBName
-      DBInstanceIdentifier: !Sub ${EnvironmentName}-db
+      DBInstanceIdentifier: !Sub "${EnvironmentName}-db"
       AllocatedStorage: 20
-      DBInstanceClass: db.t3.micro
+      MaxAllocatedStorage: 100
+      DBInstanceClass: db.t3.small
       Engine: postgres
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      ManageMasterUserPassword: true
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       BackupRetentionPeriod: 7
+      PreferredBackupWindow: 03:00-03:30
       PubliclyAccessible: false
-      StorageType: gp2
-      MultiAZ: false
+      StorageType: gp3
+      StorageEncrypted: true
+      MultiAZ: true
+      AutoMinorVersionUpgrade: true
+      DeletionProtection: true
 
   ECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub ${EnvironmentName}-cluster
+      ClusterName: !Sub "${EnvironmentName}-cluster"
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
 
   BackendLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
     Properties:
-      LogGroupName: !Sub /ecs/${EnvironmentName}-backend
+      LogGroupName: !Sub "/ecs/${EnvironmentName}-backend"
       RetentionInDays: 30
 
   FrontendLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
     Properties:
-      LogGroupName: !Sub /ecs/${EnvironmentName}-frontend
+      LogGroupName: !Sub "/ecs/${EnvironmentName}-frontend"
       RetentionInDays: 30
 
   ECSTaskExecutionRole:
@@ -326,55 +494,136 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: ReadSaathSecrets
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !GetAtt DBInstance.MasterUserSecret.SecretArn
+                  - !Ref AdminSecretValue
+                  - !If [HasLLMApiKey, !Ref LLMApiKeySecret, !Ref "AWS::NoValue"]
+                  - !If [HasWhatsAppToken, !Ref WhatsAppTokenSecret, !Ref "AWS::NoValue"]
+                  - !If [HasWhatsAppVerifyToken, !Ref WhatsAppVerifyTokenSecret, !Ref "AWS::NoValue"]
+                  - !If [HasWhatsAppAppSecret, !Ref WhatsAppAppSecretValue, !Ref "AWS::NoValue"]
+                  - !If [HasTelegramBotToken, !Ref TelegramBotTokenSecret, !Ref "AWS::NoValue"]
+                  - !If [HasTelegramWebhookSecret, !Ref TelegramWebhookSecretValue, !Ref "AWS::NoValue"]
+
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: UseCheckpointFileSystem
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - elasticfilesystem:ClientMount
+                  - elasticfilesystem:ClientWrite
+                Resource: !Sub "arn:${AWS::Partition}:elasticfilesystem:${AWS::Region}:${AWS::AccountId}:file-system/${CheckpointFileSystem}"
+                Condition:
+                  StringEquals:
+                    elasticfilesystem:AccessPointArn: !GetAtt CheckpointAccessPoint.Arn
 
   BackendTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: !Sub ${EnvironmentName}-backend
+      Family: !Sub "${EnvironmentName}-backend"
       Cpu: 512
       Memory: 1024
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      ExecutionRoleArn: !Ref ECSTaskExecutionRole
-      TaskRoleArn: !Ref ECSTaskExecutionRole
+      Volumes:
+        - Name: CheckpointsVolume
+          EFSVolumeConfiguration:
+            FileSystemId: !Ref CheckpointFileSystem
+            TransitEncryption: ENABLED
+            AuthorizationConfig:
+              AccessPointId: !Ref CheckpointAccessPoint
+              IAM: ENABLED
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
       ContainerDefinitions:
         - Name: backend
           Image: !Ref BackendImage
           Essential: true
           PortMappings:
             - ContainerPort: 8000
-              HostPort: 8000
               Protocol: tcp
           Environment:
             - Name: ENVIRONMENT
               Value: production
-            - Name: DATABASE_URL
-              Value: !Sub postgresql+asyncpg://${DBUsername}:${DBPassword}@${DBInstance.Endpoint.Address}:5432/${DBName}
+            - Name: DB_HOST
+              Value: !GetAtt DBInstance.Endpoint.Address
+            - Name: DB_NAME
+              Value: !Ref DBName
+            - Name: DB_USER
+              Value: !Ref DBUsername
             - Name: BASE_URL
-              Value: !Sub http://${BackendALB.DNSName}
+              Value: !Sub "https://${DomainName}"
             - Name: FRONTEND_URL
-              Value: !Sub http://${FrontendALB.DNSName}
-            - Name: ADMIN_SECRET
-              Value: !Ref AdminSecret
-            - Name: DEFAULT_LANGUAGE
-              Value: !Ref DefaultLanguage
+              Value: !Sub "https://${DomainName}"
             - Name: LLM_BASE_URL
               Value: !Ref LLMBaseURL
-            - Name: LLM_API_KEY
-              Value: !Ref LLMApiKey
-            - Name: WHATSAPP_TOKEN
-              Value: !Ref WhatsAppToken
             - Name: WHATSAPP_PHONE_NUMBER_ID
               Value: !Ref WhatsAppPhoneNumberId
-            - Name: WHATSAPP_VERIFY_TOKEN
-              Value: !Ref WhatsAppVerifyToken
-            - Name: WHATSAPP_APP_SECRET
-              Value: !Ref WhatsAppAppSecret
-            - Name: TELEGRAM_BOT_TOKEN
-              Value: !Ref TelegramBotToken
-            - Name: TELEGRAM_WEBHOOK_SECRET
-              Value: !Ref TelegramWebhookSecret
+            - Name: DEFAULT_LANGUAGE
+              Value: !Ref DefaultLanguage
+            - Name: RUN_SCHEDULER
+              Value: "true"
+            - Name: CHECKPOINTS_DB_PATH
+              Value: /mnt/checkpoints/checkpoints.db
+          Secrets:
+            - Name: DB_PASSWORD
+              ValueFrom: !Sub "${DBInstance.MasterUserSecret.SecretArn}:password::"
+            - Name: ADMIN_SECRET
+              ValueFrom: !Ref AdminSecretValue
+            - !If
+              - HasLLMApiKey
+              - Name: LLM_API_KEY
+                ValueFrom: !Ref LLMApiKeySecret
+              - !Ref "AWS::NoValue"
+            - !If
+              - HasWhatsAppToken
+              - Name: WHATSAPP_TOKEN
+                ValueFrom: !Ref WhatsAppTokenSecret
+              - !Ref "AWS::NoValue"
+            - !If
+              - HasWhatsAppVerifyToken
+              - Name: WHATSAPP_VERIFY_TOKEN
+                ValueFrom: !Ref WhatsAppVerifyTokenSecret
+              - !Ref "AWS::NoValue"
+            - !If
+              - HasWhatsAppAppSecret
+              - Name: WHATSAPP_APP_SECRET
+                ValueFrom: !Ref WhatsAppAppSecretValue
+              - !Ref "AWS::NoValue"
+            - !If
+              - HasTelegramBotToken
+              - Name: TELEGRAM_BOT_TOKEN
+                ValueFrom: !Ref TelegramBotTokenSecret
+              - !Ref "AWS::NoValue"
+            - !If
+              - HasTelegramWebhookSecret
+              - Name: TELEGRAM_WEBHOOK_SECRET
+                ValueFrom: !Ref TelegramWebhookSecretValue
+              - !Ref "AWS::NoValue"
+          MountPoints:
+            - SourceVolume: CheckpointsVolume
+              ContainerPath: /mnt/checkpoints
+              ReadOnly: false
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -384,36 +633,33 @@ Resources:
           HealthCheck:
             Command:
               - CMD-SHELL
-              - python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')" || exit 1
+              - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)" || exit 1
             Interval: 30
             Timeout: 5
             Retries: 3
-            StartPeriod: 60
+            StartPeriod: 120
 
   FrontendTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: !Sub ${EnvironmentName}-frontend
+      Family: !Sub "${EnvironmentName}-frontend"
       Cpu: 512
       Memory: 1024
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      ExecutionRoleArn: !Ref ECSTaskExecutionRole
-      TaskRoleArn: !Ref ECSTaskExecutionRole
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
       ContainerDefinitions:
         - Name: frontend
           Image: !Ref FrontendImage
           Essential: true
           PortMappings:
             - ContainerPort: 3000
-              HostPort: 3000
               Protocol: tcp
           Environment:
-            - Name: NEXT_PUBLIC_API_URL
-              Value: !Sub http://${BackendALB.DNSName}
-            - Name: NEXT_PUBLIC_ADMIN_SECRET
-              Value: !Ref AdminSecret
+            - Name: NODE_ENV
+              Value: production
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -421,24 +667,23 @@ Resources:
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: frontend
 
-  BackendTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub ${EnvironmentName}-backend-tg
-      VpcId: !Ref VPC
-      Port: 8000
-      Protocol: HTTP
-      TargetType: ip
-      HealthCheckEnabled: true
-      HealthCheckPath: /healthz
-      HealthCheckProtocol: HTTP
-      Matcher:
-        HttpCode: 200-399
+      Name: !Sub "${EnvironmentName}-alb"
+      Type: application
+      Scheme: internet-facing
+      IpAddressType: ipv4
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
 
   FrontendTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub ${EnvironmentName}-frontend-tg
+      Name: !Sub "${EnvironmentName}-frontend"
       VpcId: !Ref VPC
       Port: 3000
       Protocol: HTTP
@@ -447,66 +692,228 @@ Resources:
       HealthCheckPath: /
       HealthCheckProtocol: HTTP
       Matcher:
-        HttpCode: 200-399
+        HttpCode: "200-399"
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "30"
 
-  BackendALB:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+  BackendTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub ${EnvironmentName}-backend-alb
-      Type: application
-      Scheme: internet-facing
-      Subnets:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
-      SecurityGroups:
-        - !Ref BackendALBSecurityGroup
+      Name: !Sub "${EnvironmentName}-backend"
+      VpcId: !Ref VPC
+      Port: 8000
+      Protocol: HTTP
+      TargetType: ip
+      HealthCheckEnabled: true
+      HealthCheckPath: /healthz
+      HealthCheckProtocol: HTTP
+      Matcher:
+        HttpCode: "200"
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "30"
 
-  FrontendALB:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Name: !Sub ${EnvironmentName}-frontend-alb
-      Type: application
-      Scheme: internet-facing
-      Subnets:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
-      SecurityGroups:
-        - !Ref FrontendALBSecurityGroup
-
-  BackendALBListener:
+  HTTPListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
-      LoadBalancerArn: !Ref BackendALB
+      LoadBalancerArn: !Ref LoadBalancer
       Port: 80
       Protocol: HTTP
       DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref BackendTargetGroup
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: "443"
+            StatusCode: HTTP_301
 
-  FrontendALBListener:
+  HTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
-      LoadBalancerArn: !Ref FrontendALB
-      Port: 80
-      Protocol: HTTP
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
+      Certificates:
+        - CertificateArn: !Ref CertificateArn
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref FrontendTargetGroup
 
+  AdminAPIPathRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref HTTPSListener
+      Priority: 10
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /admin/*
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref BackendTargetGroup
+
+  TasksAPIPathRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref HTTPSListener
+      Priority: 20
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /tasks/*
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref BackendTargetGroup
+
+  MembersAPIPathRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref HTTPSListener
+      Priority: 30
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /members/*
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref BackendTargetGroup
+
+  HouseholdsAPIPathRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref HTTPSListener
+      Priority: 40
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /households/*
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref BackendTargetGroup
+
+  EventsAPIPathRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref HTTPSListener
+      Priority: 50
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /events/*
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref BackendTargetGroup
+
+  ArtifactsAPIPathRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref HTTPSListener
+      Priority: 60
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /artifacts/*
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref BackendTargetGroup
+
+  HealthAPIPathRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref HTTPSListener
+      Priority: 70
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /health/*
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref BackendTargetGroup
+
+  TelegramWebhookPathRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref HTTPSListener
+      Priority: 80
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /webhook/*
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref BackendTargetGroup
+
+  WhatsAppWebhookPathRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref HTTPSListener
+      Priority: 90
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /chat/*
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref BackendTargetGroup
+
+  HealthCheckPathRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref HTTPSListener
+      Priority: 100
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /healthz
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref BackendTargetGroup
+
+  BackendDocsPathRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref HTTPSListener
+      Priority: 110
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /docs
+            - /docs/*
+            - /openapi.json
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref BackendTargetGroup
+
   BackendService:
     Type: AWS::ECS::Service
+    DependsOn:
+      - HTTPSListener
+      - HTTPListener
+      - CheckpointMountTarget1
+      - CheckpointMountTarget2
     Properties:
+      ServiceName: !Sub "${EnvironmentName}-backend"
       Cluster: !Ref ECSCluster
       LaunchType: FARGATE
       DesiredCount: 1
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      HealthCheckGracePeriodSeconds: 180
+      EnableECSManagedTags: true
+      PropagateTags: SERVICE
       NetworkConfiguration:
         AwsvpcConfiguration:
-          AssignPublicIp: ENABLED
+          AssignPublicIp: DISABLED
           SecurityGroups:
-            - !Ref ECSSecurityGroup
+            - !Ref BackendSecurityGroup
           Subnets:
-            - !Ref PublicSubnet1
-            - !Ref PublicSubnet2
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet2
       TaskDefinition: !Ref BackendTaskDefinition
       LoadBalancers:
         - TargetGroupArn: !Ref BackendTargetGroup
@@ -515,34 +922,57 @@ Resources:
 
   FrontendService:
     Type: AWS::ECS::Service
+    DependsOn:
+      - HTTPSListener
+      - HTTPListener
     Properties:
+      ServiceName: !Sub "${EnvironmentName}-frontend"
       Cluster: !Ref ECSCluster
       LaunchType: FARGATE
-      DesiredCount: 1
+      DesiredCount: 2
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      HealthCheckGracePeriodSeconds: 120
+      EnableECSManagedTags: true
+      PropagateTags: SERVICE
       NetworkConfiguration:
         AwsvpcConfiguration:
-          AssignPublicIp: ENABLED
+          AssignPublicIp: DISABLED
           SecurityGroups:
-            - !Ref ECSSecurityGroup
+            - !Ref FrontendSecurityGroup
           Subnets:
-            - !Ref PublicSubnet1
-            - !Ref PublicSubnet2
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet2
       TaskDefinition: !Ref FrontendTaskDefinition
       LoadBalancers:
         - TargetGroupArn: !Ref FrontendTargetGroup
           ContainerName: frontend
           ContainerPort: 3000
 
-Outputs:
-  FrontendURL:
-    Value: !Sub http://${FrontendALB.DNSName}
-    Description: Frontend URL
+  ApplicationDNSRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt LoadBalancer.DNSName
+        HostedZoneId: !GetAtt LoadBalancer.CanonicalHostedZoneID
+        EvaluateTargetHealth: true
 
-  BackendURL:
-    Value: !Sub http://${BackendALB.DNSName}
-    Description: Backend URL
+Outputs:
+  ApplicationURL:
+    Value: !Sub "https://${DomainName}"
+    Description: Saath application (HTTPS)
+
+  LoadBalancerDNS:
+    Value: !GetAtt LoadBalancer.DNSName
+    Description: Application load balancer DNS name
 
   DatabaseEndpoint:
     Value: !GetAtt DBInstance.Endpoint.Address
-    Description: PostgreSQL endpoint
-
+    Description: Private PostgreSQL endpoint; reachable only from backend tasks
